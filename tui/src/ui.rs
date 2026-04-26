@@ -77,7 +77,7 @@ fn render_body(f: &mut Frame, area: ratatui::layout::Rect, app: &mut App) {
                 .highlight_symbol("> ");
             f.render_stateful_widget(list_widget, area, list);
         }
-        Mode::Search { input, results, list } => {
+        Mode::Search { input, results, list, .. } => {
             let inner = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([Constraint::Length(3), Constraint::Min(1)])

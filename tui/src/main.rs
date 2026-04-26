@@ -161,8 +161,15 @@ async fn main() -> Result<()> {
                             app.volume = app.volume.saturating_sub(5);
                             player.send(spfy_core::player::Cmd::SetVolume(app.volume));
                         }
-                        UiAction::Search(_) => {
-                            // wired in Task 24
+                        UiAction::Search(q) => {
+                            let api2 = api.clone();
+                            let tx2 = tx.clone();
+                            tokio::spawn(async move {
+                                let _ = match api2.search_tracks(&q, 50).await {
+                                    Ok(tracks) => tx2.send(AppEvent::SearchResult(tracks)),
+                                    Err(e) => tx2.send(AppEvent::SearchFailed(e.to_string())),
+                                };
+                            });
                         }
                     }
                 }

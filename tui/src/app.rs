@@ -59,7 +59,7 @@ impl LibTab {
 pub enum Mode {
     Library { tab: LibTab, list: ListState },
     Detail  { title: String, tracks: Vec<Track>, list: ListState, back: Box<Mode> },
-    Search  { input: String, results: SectionState<Vec<Track>>, list: ListState },
+    Search  { input: String, results: SectionState<Vec<Track>>, list: ListState, back: Box<Mode> },
 }
 
 pub struct App {
@@ -136,6 +136,17 @@ impl App {
             AppEvent::DetailFailed(msg) => {
                 self.toast = Some((Instant::now(), format!("Failed: {msg}")));
             }
+            AppEvent::SearchResult(tracks) => {
+                if let Mode::Search { results, list, .. } = &mut self.mode {
+                    *results = SectionState::Loaded(tracks);
+                    list.select(Some(0));
+                }
+            }
+            AppEvent::SearchFailed(msg) => {
+                if let Mode::Search { results, .. } = &mut self.mode {
+                    *results = SectionState::Failed(msg);
+                }
+            }
             AppEvent::Player(ev) => {
                 use spfy_core::player::Event as P;
                 match ev {
@@ -204,7 +215,13 @@ impl App {
             }
         }
 
-        // Quit on q/Esc in Library mode (Search has its own handling later).
+        // Search mode handling: take all input characters; navigate with arrows.
+        if matches!(self.mode, Mode::Search { .. }) {
+            self.handle_key_search(k);
+            return;
+        }
+
+        // Quit on q/Esc in Library mode.
         if matches!(self.mode, Mode::Library { .. })
             && (matches!(k.code, KeyCode::Char('q')) || matches!(k.code, KeyCode::Esc))
         {
@@ -218,7 +235,22 @@ impl App {
             return;
         }
 
-        // Global player keys (Search mode will gate these in Task 24).
+        // `/` enters Search mode (with current mode preserved for back).
+        if matches!(k.code, KeyCode::Char('/')) {
+            let prev = std::mem::replace(
+                &mut self.mode,
+                Mode::Library { tab: LibTab::Liked, list: ListState::default() },
+            );
+            self.mode = Mode::Search {
+                input: String::new(),
+                results: SectionState::Idle,
+                list: ListState::default(),
+                back: Box::new(prev),
+            };
+            return;
+        }
+
+        // Global player keys (gated behind !Search above).
         match k.code {
             KeyCode::Char('p') | KeyCode::Char(' ') => {
                 self.pending.push(UiAction::Toggle);
@@ -326,6 +358,69 @@ impl App {
             }
         }
 
+    }
+
+    fn handle_key_search(&mut self, k: crossterm::event::KeyEvent) {
+        // Snapshot Enter intent: if results loaded + selection valid, play that track.
+        if matches!(k.code, KeyCode::Enter) {
+            let play_id = if let Mode::Search { results: SectionState::Loaded(tracks), list, .. } = &self.mode {
+                list.selected().and_then(|idx| tracks.get(idx)).map(|t| t.id.clone())
+            } else {
+                None
+            };
+            if let Some(id) = play_id {
+                self.pending.push(UiAction::Play(id));
+                return;
+            }
+            // Otherwise dispatch a search if input is non-empty.
+            if let Mode::Search { input, results, .. } = &mut self.mode {
+                if !input.is_empty() {
+                    let q = input.clone();
+                    *results = SectionState::Loading;
+                    self.pending.push(UiAction::Search(q));
+                }
+            }
+            return;
+        }
+
+        if let Mode::Search { input, results, list, back } = &mut self.mode {
+            match k.code {
+                KeyCode::Esc => {
+                    let back_mode = std::mem::replace(
+                        back.as_mut(),
+                        Mode::Library { tab: LibTab::Liked, list: ListState::default() },
+                    );
+                    self.mode = back_mode;
+                }
+                KeyCode::Up => {
+                    if let SectionState::Loaded(tracks) = results {
+                        let len = tracks.len();
+                        if len > 0 {
+                            let cur = list.selected().unwrap_or(0) as i32;
+                            let next = (cur - 1).rem_euclid(len as i32) as usize;
+                            list.select(Some(next));
+                        }
+                    }
+                }
+                KeyCode::Down => {
+                    if let SectionState::Loaded(tracks) = results {
+                        let len = tracks.len();
+                        if len > 0 {
+                            let cur = list.selected().unwrap_or(0) as i32;
+                            let next = (cur + 1).rem_euclid(len as i32) as usize;
+                            list.select(Some(next));
+                        }
+                    }
+                }
+                KeyCode::Backspace => {
+                    input.pop();
+                }
+                KeyCode::Char(c) => {
+                    input.push(c);
+                }
+                _ => {}
+            }
+        }
     }
 
     fn clear_stale_toast(&mut self) {

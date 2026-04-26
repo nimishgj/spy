@@ -16,6 +16,8 @@ pub enum AppEvent {
         tracks: Vec<spfy_core::model::Track>,
     },
     DetailFailed(String),
+    SearchResult(Vec<spfy_core::model::Track>),
+    SearchFailed(String),
 }
 
 #[derive(Debug, Clone, Copy)]
