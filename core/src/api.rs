@@ -1,4 +1,4 @@
-use rspotify::clients::OAuthClient;
+use rspotify::clients::{BaseClient, OAuthClient};
 use rspotify::model::Market;
 use rspotify::AuthCodeSpotify;
 
@@ -112,6 +112,62 @@ impl SpotifyApi {
             .into_iter()
             .map(convert::play_history_to_model)
             .collect())
+    }
+
+    pub async fn album_tracks(&self, id: &AlbumId) -> Result<Vec<Track>> {
+        let parsed = rspotify::model::AlbumId::from_uri(&id.0)
+            .or_else(|_| rspotify::model::AlbumId::from_id(&id.0))
+            .map_err(|e| CoreError::Api(format!("bad album id {}: {e}", id.0)))?;
+        let mut out = Vec::new();
+        let mut offset: u32 = 0;
+        loop {
+            let page = self
+                .client
+                .album_track_manual(parsed.clone(), Some(Market::FromToken), Some(50), Some(offset))
+                .await
+                .map_err(|e| CoreError::Api(e.to_string()))?;
+            let len = page.items.len() as u32;
+            for s in page.items {
+                out.push(Track {
+                    id: TrackId(s.id.map(|i| i.to_string()).unwrap_or_default()),
+                    name: s.name,
+                    artists: s.artists.into_iter().map(|a| a.name).collect(),
+                    album: String::new(),
+                    duration_ms: s.duration.num_milliseconds() as u32,
+                });
+            }
+            if page.next.is_none() || len == 0 {
+                break;
+            }
+            offset += len;
+        }
+        Ok(out)
+    }
+
+    pub async fn playlist_tracks(&self, id: &PlaylistId) -> Result<Vec<Track>> {
+        let parsed = rspotify::model::PlaylistId::from_uri(&id.0)
+            .or_else(|_| rspotify::model::PlaylistId::from_id(&id.0))
+            .map_err(|e| CoreError::Api(format!("bad playlist id {}: {e}", id.0)))?;
+        let mut out = Vec::new();
+        let mut offset: u32 = 0;
+        loop {
+            let page = self
+                .client
+                .playlist_items_manual(parsed.clone(), None, Some(Market::FromToken), Some(50), Some(offset))
+                .await
+                .map_err(|e| CoreError::Api(e.to_string()))?;
+            let len = page.items.len() as u32;
+            for item in page.items {
+                if let Some(rspotify::model::PlayableItem::Track(t)) = item.track {
+                    out.push(convert::full_track_to_model(t));
+                }
+            }
+            if page.next.is_none() || len == 0 {
+                break;
+            }
+            offset += len;
+        }
+        Ok(out)
     }
 }
 
