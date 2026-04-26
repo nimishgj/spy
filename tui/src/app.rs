@@ -7,8 +7,8 @@ use spfy_core::model::{Album, AlbumId, Artist, PlayHistoryEntry, Playlist, Playl
 use crate::event::AppEvent;
 
 pub enum UiAction {
-    LoadAlbumTracks(AlbumId),
-    LoadPlaylistTracks(PlaylistId),
+    LoadAlbumTracks { id: AlbumId, title: String },
+    LoadPlaylistTracks { id: PlaylistId, title: String },
     Play(TrackId),
     PlayContext { uris: Vec<TrackId>, start: usize },
     Toggle,
@@ -182,14 +182,20 @@ impl App {
                     (LibTab::Albums, Some(idx)) => {
                         if let SectionState::Loaded(v) = &self.albums {
                             if let Some(a) = v.get(idx) {
-                                self.pending.push(UiAction::LoadAlbumTracks(a.id.clone()));
+                                self.pending.push(UiAction::LoadAlbumTracks {
+                                    id: a.id.clone(),
+                                    title: a.name.clone(),
+                                });
                             }
                         }
                     }
                     (LibTab::Playlists, Some(idx)) => {
                         if let SectionState::Loaded(v) = &self.playlists {
                             if let Some(p) = v.get(idx) {
-                                self.pending.push(UiAction::LoadPlaylistTracks(p.id.clone()));
+                                self.pending.push(UiAction::LoadPlaylistTracks {
+                                    id: p.id.clone(),
+                                    title: p.name.clone(),
+                                });
                             }
                         }
                     }

@@ -112,28 +112,22 @@ async fn main() -> Result<()> {
                     use spfy::app::UiAction;
                     use spfy::event::AppEvent;
                     match action {
-                        UiAction::LoadAlbumTracks(id) => {
+                        UiAction::LoadAlbumTracks { id, title } => {
                             let api2 = api.clone();
                             let tx2 = tx.clone();
                             tokio::spawn(async move {
                                 let _ = match api2.album_tracks(&id).await {
-                                    Ok(tracks) => tx2.send(AppEvent::DetailLoaded {
-                                        title: "Album".to_string(),
-                                        tracks,
-                                    }),
+                                    Ok(tracks) => tx2.send(AppEvent::DetailLoaded { title, tracks }),
                                     Err(e) => tx2.send(AppEvent::DetailFailed(e.to_string())),
                                 };
                             });
                         }
-                        UiAction::LoadPlaylistTracks(id) => {
+                        UiAction::LoadPlaylistTracks { id, title } => {
                             let api2 = api.clone();
                             let tx2 = tx.clone();
                             tokio::spawn(async move {
                                 let _ = match api2.playlist_tracks(&id).await {
-                                    Ok(tracks) => tx2.send(AppEvent::DetailLoaded {
-                                        title: "Playlist".to_string(),
-                                        tracks,
-                                    }),
+                                    Ok(tracks) => tx2.send(AppEvent::DetailLoaded { title, tracks }),
                                     Err(e) => tx2.send(AppEvent::DetailFailed(e.to_string())),
                                 };
                             });
