@@ -2,9 +2,22 @@ use std::time::{Duration, Instant};
 
 use crossterm::event::{KeyCode, KeyEventKind, KeyModifiers};
 use ratatui::widgets::ListState;
-use spfy_core::model::{Album, Artist, PlayHistoryEntry, Playlist, Track};
+use spfy_core::model::{Album, AlbumId, Artist, PlayHistoryEntry, Playlist, PlaylistId, Track, TrackId};
 
 use crate::event::AppEvent;
+
+pub enum UiAction {
+    LoadAlbumTracks(AlbumId),
+    LoadPlaylistTracks(PlaylistId),
+    Play(TrackId),
+    PlayContext { uris: Vec<TrackId>, start: usize },
+    Toggle,
+    Next,
+    Previous,
+    VolumeUp,
+    VolumeDown,
+    Search(String),
+}
 
 pub enum SectionState<T> {
     Idle,
@@ -64,6 +77,8 @@ pub struct App {
     pub mode: Mode,
     pub toast: Option<(Instant, String)>,
     pub should_quit: bool,
+
+    pub pending: Vec<UiAction>,
 }
 
 impl App {
@@ -81,6 +96,7 @@ impl App {
             mode: Mode::Library { tab: LibTab::Liked, list: ListState::default() },
             toast: None,
             should_quit: false,
+            pending: Vec::new(),
         }
     }
 
@@ -88,6 +104,23 @@ impl App {
         match event {
             AppEvent::Key(k) if k.kind == KeyEventKind::Press => self.handle_key(k),
             AppEvent::Tick => self.clear_stale_toast(),
+            AppEvent::LibraryLoaded(section) => match section {
+                crate::event::LibrarySection::Liked(v) => self.liked = SectionState::Loaded(v),
+                crate::event::LibrarySection::Albums(v) => self.albums = SectionState::Loaded(v),
+                crate::event::LibrarySection::Playlists(v) => self.playlists = SectionState::Loaded(v),
+                crate::event::LibrarySection::Artists(v) => self.artists = SectionState::Loaded(v),
+                crate::event::LibrarySection::Recent(v) => self.recent = SectionState::Loaded(v),
+            },
+            AppEvent::LibraryFailed(id, msg) => {
+                use crate::event::SectionId;
+                match id {
+                    SectionId::Liked => self.liked = SectionState::Failed(msg),
+                    SectionId::Albums => self.albums = SectionState::Failed(msg),
+                    SectionId::Playlists => self.playlists = SectionState::Failed(msg),
+                    SectionId::Artists => self.artists = SectionState::Failed(msg),
+                    SectionId::Recent => self.recent = SectionState::Failed(msg),
+                }
+            }
             _ => {}
         }
     }

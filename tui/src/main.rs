@@ -39,11 +39,64 @@ async fn main() -> Result<()> {
     install_panic_hook();
     let mut term = enter()?;
 
+    let session = spfy_core::auth::login()?;
+    let api = std::sync::Arc::new(spfy_core::api::SpotifyApi::new(session.api));
+
     let (tx, mut rx) = event::channel();
     spawn_key_thread(tx.clone());
     spawn_tick(tx.clone());
 
     let mut app = App::new();
+
+    app.liked = spfy::app::SectionState::Loading;
+    app.albums = spfy::app::SectionState::Loading;
+    app.playlists = spfy::app::SectionState::Loading;
+    app.artists = spfy::app::SectionState::Loading;
+    app.recent = spfy::app::SectionState::Loading;
+
+    {
+        use spfy::event::{AppEvent, LibrarySection, SectionId};
+        let api2 = api.clone();
+        let tx2 = tx.clone();
+        tokio::spawn(async move {
+            let _ = match api2.liked_tracks().await {
+                Ok(v) => tx2.send(AppEvent::LibraryLoaded(LibrarySection::Liked(v))),
+                Err(e) => tx2.send(AppEvent::LibraryFailed(SectionId::Liked, e.to_string())),
+            };
+        });
+        let api2 = api.clone();
+        let tx2 = tx.clone();
+        tokio::spawn(async move {
+            let _ = match api2.saved_albums().await {
+                Ok(v) => tx2.send(AppEvent::LibraryLoaded(LibrarySection::Albums(v))),
+                Err(e) => tx2.send(AppEvent::LibraryFailed(SectionId::Albums, e.to_string())),
+            };
+        });
+        let api2 = api.clone();
+        let tx2 = tx.clone();
+        tokio::spawn(async move {
+            let _ = match api2.playlists().await {
+                Ok(v) => tx2.send(AppEvent::LibraryLoaded(LibrarySection::Playlists(v))),
+                Err(e) => tx2.send(AppEvent::LibraryFailed(SectionId::Playlists, e.to_string())),
+            };
+        });
+        let api2 = api.clone();
+        let tx2 = tx.clone();
+        tokio::spawn(async move {
+            let _ = match api2.followed_artists().await {
+                Ok(v) => tx2.send(AppEvent::LibraryLoaded(LibrarySection::Artists(v))),
+                Err(e) => tx2.send(AppEvent::LibraryFailed(SectionId::Artists, e.to_string())),
+            };
+        });
+        let api2 = api.clone();
+        let tx2 = tx.clone();
+        tokio::spawn(async move {
+            let _ = match api2.recently_played().await {
+                Ok(v) => tx2.send(AppEvent::LibraryLoaded(LibrarySection::Recent(v))),
+                Err(e) => tx2.send(AppEvent::LibraryFailed(SectionId::Recent, e.to_string())),
+            };
+        });
+    }
 
     loop {
         term.draw(|f| spfy::ui::render(f, &mut app))?;
@@ -53,6 +106,10 @@ async fn main() -> Result<()> {
                 app.update(ev);
                 if app.should_quit {
                     break;
+                }
+                let actions: Vec<_> = std::mem::take(&mut app.pending);
+                for action in actions {
+                    let _ = action; // Tasks 22-24 will fill this in
                 }
             }
             None => break,

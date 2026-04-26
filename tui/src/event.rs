@@ -9,6 +9,26 @@ pub enum AppEvent {
     Key(KeyEvent),
     Tick,
     Player(PlayerEvent),
+    LibraryLoaded(LibrarySection),
+    LibraryFailed(SectionId, String),
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum SectionId {
+    Liked,
+    Albums,
+    Playlists,
+    Artists,
+    Recent,
+}
+
+#[derive(Debug)]
+pub enum LibrarySection {
+    Liked(Vec<spfy_core::model::Track>),
+    Albums(Vec<spfy_core::model::Album>),
+    Playlists(Vec<spfy_core::model::Playlist>),
+    Artists(Vec<spfy_core::model::Artist>),
+    Recent(Vec<spfy_core::model::PlayHistoryEntry>),
 }
 
 pub fn channel() -> (mpsc::UnboundedSender<AppEvent>, mpsc::UnboundedReceiver<AppEvent>) {
