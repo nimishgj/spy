@@ -169,6 +169,20 @@ impl SpotifyApi {
         }
         Ok(out)
     }
+
+    pub async fn search_tracks(&self, query: &str, limit: u32) -> Result<Vec<Track>> {
+        let result = self
+            .client
+            .search(query, rspotify::model::SearchType::Track, Some(Market::FromToken), None, Some(limit), None)
+            .await
+            .map_err(|e| CoreError::Api(e.to_string()))?;
+
+        let tracks = match result {
+            rspotify::model::SearchResult::Tracks(p) => p.items,
+            _ => Vec::new(),
+        };
+        Ok(tracks.into_iter().map(convert::full_track_to_model).collect())
+    }
 }
 
 /// Run `f`; if it returns `CoreError::Auth(...)`, run it once more.
