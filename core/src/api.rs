@@ -185,18 +185,6 @@ impl SpotifyApi {
     }
 }
 
-/// Run `f`; if it returns `CoreError::Auth(...)`, run it once more.
-/// Useful when an access token has just expired mid-call.
-pub fn retry_once_on_auth<T, F>(mut f: F) -> Result<T>
-where
-    F: FnMut() -> Result<T>,
-{
-    match f() {
-        Err(CoreError::Auth(_)) => f(),
-        other => other,
-    }
-}
-
 pub mod convert {
     use crate::model::{
         Album, AlbumId, Artist, ArtistId, PlayHistoryEntry, Playlist, PlaylistId, Track, TrackId,

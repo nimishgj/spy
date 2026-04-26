@@ -200,13 +200,6 @@ async fn run(
                 }
                 Cmd::Toggle => {
                     if playing { player.pause(); } else { player.play(); }
-                    playing = !playing;
-                    let _ = event_tx.send(if playing { Event::Resumed } else { Event::Paused });
-                    if playing {
-                        if let Some((_, pos)) = anchor.take() {
-                            anchor = Some((Instant::now(), pos));
-                        }
-                    }
                 }
                 Cmd::Next => {
                     if let AdvanceResult::Loaded(id) = queue.next() {
