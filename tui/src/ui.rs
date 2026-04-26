@@ -7,6 +7,14 @@ use ratatui::Frame;
 use crate::app::{App, LibTab, Mode, SectionState};
 
 pub fn render(f: &mut Frame, app: &mut App) {
+    if let Some(msg) = app.fatal.clone() {
+        let area = f.area();
+        let block = Block::default().borders(Borders::ALL).title("Fatal");
+        let para = Paragraph::new(format!("{msg}\n\nPress q to quit.")).block(block);
+        f.render_widget(para, area);
+        return;
+    }
+
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -114,7 +122,7 @@ fn section_items<T>(state: &SectionState<Vec<T>>, fmt: impl Fn(&T) -> String) ->
 }
 
 fn render_now_playing(f: &mut Frame, area: ratatui::layout::Rect, app: &App) {
-    let text = match &app.now_playing {
+    let main_text = match &app.now_playing {
         Some(t) => {
             let icon = if app.is_playing { "▶" } else { "⏸" };
             let pos = format_ms(app.position_ms);
@@ -122,7 +130,12 @@ fn render_now_playing(f: &mut Frame, area: ratatui::layout::Rect, app: &App) {
         }
         None => "(nothing playing)".to_string(),
     };
-    let para = Paragraph::new(text).block(Block::default().borders(Borders::ALL));
+    let body = if let Some((_, ref msg)) = app.toast {
+        format!("{main_text}\n{msg}")
+    } else {
+        main_text
+    };
+    let para = Paragraph::new(body).block(Block::default().borders(Borders::ALL));
     f.render_widget(para, area);
 }
 

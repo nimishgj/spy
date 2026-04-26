@@ -76,6 +76,7 @@ pub struct App {
 
     pub mode: Mode,
     pub toast: Option<(Instant, String)>,
+    pub fatal: Option<String>,
     pub should_quit: bool,
 
     pub pending: Vec<UiAction>,
@@ -95,6 +96,7 @@ impl App {
             recent: SectionState::Idle,
             mode: Mode::Library { tab: LibTab::Liked, list: ListState::default() },
             toast: None,
+            fatal: None,
             should_quit: false,
             pending: Vec::new(),
         }
@@ -165,7 +167,11 @@ impl App {
                         self.position_ms = 0;
                     }
                     P::Error(msg) => {
-                        self.toast = Some((Instant::now(), msg));
+                        if msg.contains("Premium") {
+                            self.fatal = Some(msg);
+                        } else {
+                            self.toast = Some((Instant::now(), msg));
+                        }
                     }
                 }
             }
