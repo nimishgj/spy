@@ -13,7 +13,7 @@ tracing.workspace = true
 chrono.workspace = true
 directories.workspace = true
 
-librespot       = { version = "0.8", default-features = false, features = ["rodio-backend"] }
-librespot-oauth = "0.8"
+librespot       = { version = "0.8", default-features = false, features = ["rodio-backend", "rustls-tls-native-roots"] }
+librespot-oauth = { version = "0.8", default-features = false, features = ["rustls-tls-native-roots"] }
 rspotify        = { version = "0.15", default-features = false, features = ["client-reqwest", "reqwest-rustls-tls"] }
 rodio           = "0.20"
