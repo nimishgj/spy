@@ -151,3 +151,37 @@ fn map_token(token: librespot_oauth::OAuthToken) -> StoredToken {
         scopes: API_SCOPES.iter().map(|s| (*s).into()).collect(),
     }
 }
+
+use rspotify::{AuthCodeSpotify, Token as RspotifyToken, Credentials as RspotifyCredentials, Config as RspotifyConfig};
+use std::collections::HashSet;
+
+pub struct Session {
+    pub player_credentials: Credentials,
+    pub api: AuthCodeSpotify,
+}
+
+pub fn login() -> Result<Session> {
+    let player_credentials = librespot_credentials()?;
+    let stored = rspotify_token()?;
+
+    let scopes: HashSet<String> = stored.scopes.iter().cloned().collect();
+    let token = RspotifyToken {
+        access_token: stored.access_token,
+        refresh_token: stored.refresh_token,
+        expires_in: chrono::Duration::seconds(3600),
+        expires_at: Some(stored.expires_at),
+        scopes,
+    };
+
+    let creds = RspotifyCredentials {
+        id: SPFY_CLIENT_ID.to_string(),
+        secret: None,
+    };
+    let config = RspotifyConfig {
+        token_cached: false,
+        ..Default::default()
+    };
+    let api = AuthCodeSpotify::from_token_with_config(token, creds, Default::default(), config);
+
+    Ok(Session { player_credentials, api })
+}
