@@ -46,13 +46,7 @@ async fn main() -> Result<()> {
     let mut app = App::new();
 
     loop {
-        term.draw(|f| {
-            use ratatui::widgets::{Block, Borders, Paragraph};
-            f.render_widget(
-                Paragraph::new("spfy — press q to quit").block(Block::default().borders(Borders::ALL)),
-                f.area(),
-            );
-        })?;
+        term.draw(|f| spfy::ui::render(f, &mut app))?;
 
         match rx.recv().await {
             Some(ev) => {
