@@ -46,6 +46,12 @@ async fn main() -> Result<()> {
     spawn_key_thread(tx.clone());
     spawn_tick(tx.clone());
 
+    let mut player = spfy_core::player::spawn(
+        session.player_credentials,
+        tokio::runtime::Handle::current(),
+    );
+    spfy::event::spawn_player_forwarder(tx.clone(), player.take_events());
+
     let mut app = App::new();
 
     app.liked = spfy::app::SectionState::Loading;
@@ -132,8 +138,32 @@ async fn main() -> Result<()> {
                                 };
                             });
                         }
-                        // Other UiAction variants will be wired in Task 23/24.
-                        _ => {}
+                        UiAction::Play(id) => {
+                            player.send(spfy_core::player::Cmd::Play(id));
+                        }
+                        UiAction::PlayContext { uris, start } => {
+                            player.send(spfy_core::player::Cmd::PlayContext { uris, start });
+                        }
+                        UiAction::Toggle => {
+                            player.send(spfy_core::player::Cmd::Toggle);
+                        }
+                        UiAction::Next => {
+                            player.send(spfy_core::player::Cmd::Next);
+                        }
+                        UiAction::Previous => {
+                            player.send(spfy_core::player::Cmd::Previous);
+                        }
+                        UiAction::VolumeUp => {
+                            app.volume = (app.volume + 5).min(100);
+                            player.send(spfy_core::player::Cmd::SetVolume(app.volume));
+                        }
+                        UiAction::VolumeDown => {
+                            app.volume = app.volume.saturating_sub(5);
+                            player.send(spfy_core::player::Cmd::SetVolume(app.volume));
+                        }
+                        UiAction::Search(_) => {
+                            // wired in Task 24
+                        }
                     }
                 }
             }
@@ -141,6 +171,7 @@ async fn main() -> Result<()> {
         }
     }
 
+    player.send(spfy_core::player::Cmd::Quit);
     leave(term)?;
     Ok(())
 }

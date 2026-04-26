@@ -136,8 +136,59 @@ impl App {
             AppEvent::DetailFailed(msg) => {
                 self.toast = Some((Instant::now(), format!("Failed: {msg}")));
             }
+            AppEvent::Player(ev) => {
+                use spfy_core::player::Event as P;
+                match ev {
+                    P::Started { track, duration_ms: _ } => {
+                        self.now_playing = self.find_track_by_id(&track);
+                        self.is_playing = true;
+                        self.position_ms = 0;
+                    }
+                    P::Resumed => self.is_playing = true,
+                    P::Paused => self.is_playing = false,
+                    P::Position(ms) => self.position_ms = ms,
+                    P::EndOfTrack => {}
+                    P::Stopped => {
+                        self.is_playing = false;
+                        self.now_playing = None;
+                        self.position_ms = 0;
+                    }
+                    P::Error(msg) => {
+                        self.toast = Some((Instant::now(), msg));
+                    }
+                }
+            }
             _ => {}
         }
+    }
+
+    fn find_track_by_id(&self, id: &TrackId) -> Option<Track> {
+        let in_section = |s: &SectionState<Vec<Track>>| -> Option<Track> {
+            if let SectionState::Loaded(v) = s {
+                v.iter().find(|t| t.id == *id).cloned()
+            } else {
+                None
+            }
+        };
+        if let Some(t) = in_section(&self.liked) {
+            return Some(t);
+        }
+        if let SectionState::Loaded(v) = &self.recent {
+            if let Some(e) = v.iter().find(|e| e.track.id == *id) {
+                return Some(e.track.clone());
+            }
+        }
+        if let Mode::Detail { tracks, .. } = &self.mode {
+            if let Some(t) = tracks.iter().find(|t| t.id == *id) {
+                return Some(t.clone());
+            }
+        }
+        if let Mode::Search { results: SectionState::Loaded(tracks), .. } = &self.mode {
+            if let Some(t) = tracks.iter().find(|t| t.id == *id) {
+                return Some(t.clone());
+            }
+        }
+        None
     }
 
     fn handle_key(&mut self, k: crossterm::event::KeyEvent) {
@@ -165,6 +216,31 @@ impl App {
         if matches!(self.mode, Mode::Detail { .. }) && matches!(k.code, KeyCode::Char('q')) {
             self.should_quit = true;
             return;
+        }
+
+        // Global player keys (Search mode will gate these in Task 24).
+        match k.code {
+            KeyCode::Char('p') | KeyCode::Char(' ') => {
+                self.pending.push(UiAction::Toggle);
+                return;
+            }
+            KeyCode::Char('n') => {
+                self.pending.push(UiAction::Next);
+                return;
+            }
+            KeyCode::Char('b') => {
+                self.pending.push(UiAction::Previous);
+                return;
+            }
+            KeyCode::Char('+') | KeyCode::Char('=') => {
+                self.pending.push(UiAction::VolumeUp);
+                return;
+            }
+            KeyCode::Char('-') => {
+                self.pending.push(UiAction::VolumeDown);
+                return;
+            }
+            _ => {}
         }
 
         // Phase 1: snapshot Library state for borrow-free decisions.
@@ -199,13 +275,41 @@ impl App {
                             }
                         }
                     }
+                    (LibTab::Liked, Some(idx)) => {
+                        if let SectionState::Loaded(v) = &self.liked {
+                            if !v.is_empty() && idx < v.len() {
+                                let uris: Vec<TrackId> = v.iter().map(|t| t.id.clone()).collect();
+                                self.pending.push(UiAction::PlayContext { uris, start: idx });
+                            }
+                        }
+                    }
+                    (LibTab::Recent, Some(idx)) => {
+                        if let SectionState::Loaded(v) = &self.recent {
+                            if let Some(e) = v.get(idx) {
+                                self.pending.push(UiAction::Play(e.track.id.clone()));
+                            }
+                        }
+                    }
                     _ => {}
                 }
                 return;
             }
         }
 
-        // Phase 2b: tab/cursor mutation in Library mode.
+        // Phase 2b: Enter in Detail mode (play tracks list starting at idx).
+        if matches!(k.code, KeyCode::Enter) {
+            if let Mode::Detail { tracks, list, .. } = &self.mode {
+                if let Some(idx) = list.selected() {
+                    if idx < tracks.len() {
+                        let uris: Vec<TrackId> = tracks.iter().map(|t| t.id.clone()).collect();
+                        self.pending.push(UiAction::PlayContext { uris, start: idx });
+                    }
+                }
+                return;
+            }
+        }
+
+        // Phase 2c: tab/cursor mutation in Library mode.
         if let Mode::Library { tab, list } = &mut self.mode {
             let lib_len = lib_state.map(|(_, _, l)| l);
             match (k.code, k.modifiers) {
@@ -221,6 +325,7 @@ impl App {
                 _ => {}
             }
         }
+
     }
 
     fn clear_stale_toast(&mut self) {
