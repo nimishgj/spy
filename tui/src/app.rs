@@ -152,8 +152,16 @@ impl App {
             AppEvent::Player(ev) => {
                 use spfy_core::player::Event as P;
                 match ev {
-                    P::Started { track, duration_ms: _ } => {
-                        self.now_playing = self.find_track_by_id(&track);
+                    P::Started { track, duration_ms } => {
+                        self.now_playing = self.find_track_by_id(&track).or_else(|| {
+                            Some(Track {
+                                id: track.clone(),
+                                name: track.0.clone(),
+                                artists: Vec::new(),
+                                album: String::new(),
+                                duration_ms,
+                            })
+                        });
                         self.is_playing = true;
                         self.position_ms = 0;
                     }
