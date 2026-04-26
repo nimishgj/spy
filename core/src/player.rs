@@ -1,6 +1,15 @@
+use std::path::PathBuf;
+
+use librespot::core::authentication::Credentials;
+use librespot::core::cache::Cache;
+use librespot::core::config::SessionConfig;
+use librespot::core::session::Session;
+use tokio::runtime::Handle;
 use tokio::sync::mpsc;
+use tracing::info;
 
 use crate::model::TrackId;
+use crate::paths;
 
 pub mod queue {
     use crate::model::TrackId;
@@ -84,4 +93,56 @@ impl PlayerHandle {
             .take()
             .expect("PlayerHandle::take_events called twice")
     }
+}
+
+pub fn spawn(creds: Credentials, rt: Handle) -> PlayerHandle {
+    let (cmd_tx, cmd_rx) = mpsc::unbounded_channel::<Cmd>();
+    let (event_tx, event_rx) = mpsc::unbounded_channel::<Event>();
+
+    rt.spawn(async move {
+        if let Err(e) = run(creds, cmd_rx, event_tx.clone()).await {
+            let _ = event_tx.send(Event::Error(e.to_string()));
+        }
+    });
+
+    PlayerHandle {
+        cmd_tx,
+        event_rx: Some(event_rx),
+    }
+}
+
+async fn run(
+    creds: Credentials,
+    mut cmd_rx: mpsc::UnboundedReceiver<Cmd>,
+    event_tx: mpsc::UnboundedSender<Event>,
+) -> anyhow::Result<()> {
+    let cache_dir = paths::librespot_cache_dir()?;
+    let cache = Cache::new(
+        Some::<PathBuf>(cache_dir.clone()),
+        None,
+        Some(cache_dir),
+        None,
+    )
+    .map_err(|e| anyhow::anyhow!("cache: {e}"))?;
+    let session = Session::new(SessionConfig::default(), Some(cache));
+
+    info!("connecting to Spotify");
+    if let Err(e) = session.connect(creds, true).await {
+        let msg = e.to_string();
+        if msg.to_lowercase().contains("premium")
+            || msg.to_lowercase().contains("badcredentials")
+        {
+            let _ = event_tx.send(Event::Error("Premium account required".into()));
+        } else {
+            let _ = event_tx.send(Event::Error(format!("connect failed: {msg}")));
+        }
+        return Ok(());
+    }
+
+    // Continuation in Task 15.
+    info!("session connected; player setup deferred to Task 15");
+    let _ = event_tx;
+    let _ = cmd_rx;
+    let _ = session;
+    Ok(())
 }
