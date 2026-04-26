@@ -36,6 +36,17 @@ fn leave(mut term: Tui) -> Result<()> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    use tracing_subscriber::EnvFilter;
+
+    let log_path = spfy_core::paths::log_path()?;
+    let log_file = std::fs::File::create(&log_path)?;
+    tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| "info,librespot=warn".into()))
+        .with_writer(log_file)
+        .with_ansi(false)
+        .init();
+    tracing::info!("spfy starting");
+
     install_panic_hook();
     let mut term = enter()?;
 
