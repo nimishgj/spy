@@ -101,12 +101,22 @@ impl App {
             return;
         }
 
-        // Tab navigation in Library mode
-        if let Mode::Library { tab, .. } = &mut self.mode {
+        let lib_len = if let Mode::Library { tab, .. } = &self.mode {
+            Some(self.section_len(*tab))
+        } else { None };
+
+        // Tab navigation + cursor movement in Library mode
+        if let Mode::Library { tab, list } = &mut self.mode {
             match (k.code, k.modifiers) {
                 (KeyCode::Tab, m) if !m.contains(KeyModifiers::SHIFT) => *tab = tab.next(),
                 (KeyCode::BackTab, _) => *tab = tab.previous(),
                 (KeyCode::Tab, m) if m.contains(KeyModifiers::SHIFT) => *tab = tab.previous(),
+                (KeyCode::Char('j') | KeyCode::Down, _) => {
+                    if let Some(len) = lib_len { move_cursor(list, len, 1); }
+                }
+                (KeyCode::Char('k') | KeyCode::Up, _) => {
+                    if let Some(len) = lib_len { move_cursor(list, len, -1); }
+                }
                 _ => {}
             }
         }
@@ -119,6 +129,33 @@ impl App {
             }
         }
     }
+
+    fn section_len(&self, tab: LibTab) -> usize {
+        match tab {
+            LibTab::Liked => loaded_len(&self.liked),
+            LibTab::Albums => loaded_len(&self.albums),
+            LibTab::Playlists => loaded_len(&self.playlists),
+            LibTab::Artists => loaded_len(&self.artists),
+            LibTab::Recent => loaded_len(&self.recent),
+        }
+    }
+}
+
+fn loaded_len<T>(s: &SectionState<Vec<T>>) -> usize {
+    match s {
+        SectionState::Loaded(v) => v.len(),
+        _ => 0,
+    }
+}
+
+fn move_cursor(list: &mut ListState, len: usize, delta: i32) {
+    if len == 0 {
+        list.select(None);
+        return;
+    }
+    let cur = list.selected().unwrap_or(0) as i32;
+    let next = (cur + delta).rem_euclid(len as i32) as usize;
+    list.select(Some(next));
 }
 
 impl Default for App {

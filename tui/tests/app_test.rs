@@ -28,3 +28,17 @@ fn tab_cycles_through_library_tabs() {
     )));
     assert!(matches!(app.mode, Mode::Library { tab: LibTab::Albums, .. }));
 }
+
+#[test]
+fn j_moves_cursor_down_when_section_loaded() {
+    use spfy_core::model::{Track, TrackId};
+    let mut app = App::new();
+    app.liked = spfy::app::SectionState::Loaded(vec![
+        Track { id: TrackId("a".into()), name: "A".into(), artists: vec![], album: "".into(), duration_ms: 0 },
+        Track { id: TrackId("b".into()), name: "B".into(), artists: vec![], album: "".into(), duration_ms: 0 },
+    ]);
+    app.update(key('j'));
+    if let Mode::Library { list, .. } = &app.mode {
+        assert_eq!(list.selected(), Some(1));
+    } else { panic!() }
+}
