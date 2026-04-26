@@ -1,5 +1,5 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use spfy::app::App;
+use spfy::app::{App, LibTab, Mode};
 use spfy::event::AppEvent;
 
 fn key(c: char) -> AppEvent {
@@ -16,4 +16,15 @@ fn pressing_q_sets_should_quit() {
     assert!(!app.should_quit);
     app.update(key('q'));
     assert!(app.should_quit);
+}
+
+#[test]
+fn tab_cycles_through_library_tabs() {
+    let mut app = App::new();
+    assert!(matches!(app.mode, Mode::Library { tab: LibTab::Liked, .. }));
+
+    app.update(AppEvent::Key(KeyEvent::new_with_kind(
+        KeyCode::Tab, KeyModifiers::NONE, KeyEventKind::Press,
+    )));
+    assert!(matches!(app.mode, Mode::Library { tab: LibTab::Albums, .. }));
 }
