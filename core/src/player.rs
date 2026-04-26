@@ -1,15 +1,24 @@
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use librespot::core::authentication::Credentials;
 use librespot::core::cache::Cache;
 use librespot::core::config::SessionConfig;
 use librespot::core::session::Session;
+use librespot::core::spotify_uri::SpotifyUri;
+use librespot::playback::audio_backend;
+use librespot::playback::config::{AudioFormat, PlayerConfig, VolumeCtrl};
+use librespot::playback::mixer::softmixer::SoftMixer;
+use librespot::playback::mixer::{Mixer, MixerConfig};
+use librespot::playback::player::{Player, PlayerEvent};
 use tokio::runtime::Handle;
 use tokio::sync::mpsc;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::model::TrackId;
 use crate::paths;
+use crate::player::queue::{AdvanceResult, Queue};
 
 pub mod queue {
     use crate::model::TrackId;
@@ -111,6 +120,13 @@ pub fn spawn(creds: Credentials, rt: Handle) -> PlayerHandle {
     }
 }
 
+fn load_track(player: &Arc<Player>, id: &TrackId) -> anyhow::Result<()> {
+    let uri = SpotifyUri::from_uri(&id.0)
+        .map_err(|e| anyhow::anyhow!("bad uri {}: {e:?}", id.0))?;
+    player.load(uri, true, 0);
+    Ok(())
+}
+
 async fn run(
     creds: Credentials,
     mut cmd_rx: mpsc::UnboundedReceiver<Cmd>,
@@ -139,10 +155,130 @@ async fn run(
         return Ok(());
     }
 
-    // Continuation in Task 15.
-    info!("session connected; player setup deferred to Task 15");
-    let _ = event_tx;
-    let _ = cmd_rx;
-    let _ = session;
+    // ---- Audio backend + mixer ----
+    let mixer: Arc<dyn Mixer> = Arc::new(
+        SoftMixer::open(MixerConfig {
+            volume_ctrl: VolumeCtrl::Linear,
+            ..MixerConfig::default()
+        })
+        .map_err(|e| anyhow::anyhow!("mixer: {e}"))?,
+    );
+    let backend = audio_backend::find(Some("rodio".into()))
+        .ok_or_else(|| anyhow::anyhow!("rodio backend missing"))?;
+    let player = Player::new(
+        PlayerConfig::default(),
+        session.clone(),
+        mixer.get_soft_volume(),
+        move || backend(None, AudioFormat::default()),
+    );
+
+    let mut player_events = player.get_player_event_channel();
+    let mut queue = Queue::default();
+    let mut anchor: Option<(Instant, u32)> = None;
+    let mut playing = false;
+    let mut tick = tokio::time::interval(Duration::from_millis(500));
+
+    loop {
+        tokio::select! {
+            Some(cmd) = cmd_rx.recv() => match cmd {
+                Cmd::Play(id) => {
+                    queue.set(vec![id.clone()], 0);
+                    if let Err(e) = load_track(&player, &id) {
+                        let _ = event_tx.send(Event::Error(e.to_string()));
+                    } else {
+                        playing = true;
+                    }
+                }
+                Cmd::PlayContext { uris, start } => {
+                    if let Some(first) = queue.set(uris, start) {
+                        if let Err(e) = load_track(&player, &first) {
+                            let _ = event_tx.send(Event::Error(e.to_string()));
+                        } else {
+                            playing = true;
+                        }
+                    }
+                }
+                Cmd::Toggle => {
+                    if playing { player.pause(); } else { player.play(); }
+                    playing = !playing;
+                    let _ = event_tx.send(if playing { Event::Resumed } else { Event::Paused });
+                    if playing {
+                        if let Some((_, pos)) = anchor.take() {
+                            anchor = Some((Instant::now(), pos));
+                        }
+                    }
+                }
+                Cmd::Next => {
+                    if let AdvanceResult::Loaded(id) = queue.next() {
+                        let _ = load_track(&player, &id);
+                        playing = true;
+                    } else {
+                        let _ = event_tx.send(Event::Stopped);
+                        playing = false;
+                    }
+                }
+                Cmd::Previous => {
+                    if let AdvanceResult::Loaded(id) = queue.previous() {
+                        let _ = load_track(&player, &id);
+                        playing = true;
+                    }
+                }
+                Cmd::Seek(ms) => {
+                    player.seek(ms);
+                    anchor = Some((Instant::now(), ms));
+                }
+                Cmd::SetVolume(v) => {
+                    let scaled = (v as u32 * 65535 / 100).min(65535) as u16;
+                    mixer.set_volume(scaled);
+                }
+                Cmd::Quit => break,
+            },
+            Some(ev) = player_events.recv() => match ev {
+                PlayerEvent::TrackChanged { audio_item } => {
+                    let id = TrackId(audio_item.track_id.to_uri().unwrap_or_default());
+                    let dur = audio_item.duration_ms;
+                    anchor = Some((Instant::now(), 0));
+                    let _ = event_tx.send(Event::Started { track: id, duration_ms: dur });
+                }
+                PlayerEvent::Playing { position_ms, .. } => {
+                    anchor = Some((Instant::now(), position_ms));
+                    playing = true;
+                    let _ = event_tx.send(Event::Resumed);
+                }
+                PlayerEvent::Paused { position_ms, .. } => {
+                    anchor = Some((Instant::now(), position_ms));
+                    playing = false;
+                    let _ = event_tx.send(Event::Paused);
+                }
+                PlayerEvent::EndOfTrack { .. } => {
+                    let _ = event_tx.send(Event::EndOfTrack);
+                    if let AdvanceResult::Loaded(id) = queue.next() {
+                        let _ = load_track(&player, &id);
+                    } else {
+                        playing = false;
+                        let _ = event_tx.send(Event::Stopped);
+                    }
+                }
+                PlayerEvent::Unavailable { .. } => {
+                    warn!("track unavailable; skipping");
+                    if let AdvanceResult::Loaded(id) = queue.next() {
+                        let _ = load_track(&player, &id);
+                    }
+                }
+                _ => {}
+            },
+            _ = tick.tick() => {
+                if playing {
+                    if let Some((started, base)) = anchor {
+                        let elapsed = (Instant::now() - started).as_millis() as u32;
+                        let _ = event_tx.send(Event::Position(base + elapsed));
+                    }
+                }
+            }
+        }
+    }
+
+    info!("player worker exiting");
+    player.stop();
     Ok(())
 }
