@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -5,6 +6,10 @@ use chrono::{DateTime, Utc};
 use librespot::core::authentication::Credentials;
 use librespot::core::cache::Cache;
 use librespot_oauth::OAuthClientBuilder;
+use rspotify::{
+    AuthCodeSpotify, Config as RspotifyConfig, Credentials as RspotifyCredentials,
+    Token as RspotifyToken,
+};
 use serde::{Deserialize, Serialize};
 use tracing::info;
 
@@ -151,9 +156,6 @@ fn map_token(token: librespot_oauth::OAuthToken) -> StoredToken {
         scopes: API_SCOPES.iter().map(|s| (*s).into()).collect(),
     }
 }
-
-use rspotify::{AuthCodeSpotify, Token as RspotifyToken, Credentials as RspotifyCredentials, Config as RspotifyConfig};
-use std::collections::HashSet;
 
 pub struct Session {
     pub player_credentials: Credentials,
