@@ -3,6 +3,10 @@ name = "spfy"
 version.workspace = true
 edition.workspace = true
 
+[lib]
+name = "spfy"
+path = "src/lib.rs"
+
 [[bin]]
 name = "spfy"
 path = "src/main.rs"

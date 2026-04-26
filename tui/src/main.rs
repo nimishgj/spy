@@ -1,9 +1,6 @@
-mod event;
-
 use std::io::{self, Stdout};
 
 use anyhow::Result;
-use crossterm::event::{KeyCode, KeyEventKind};
 use crossterm::execute;
 use crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
@@ -11,7 +8,8 @@ use crossterm::terminal::{
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 
-use crate::event::{spawn_key_thread, spawn_tick, AppEvent};
+use spfy::app::App;
+use spfy::event::{self, spawn_key_thread, spawn_tick};
 
 type Tui = Terminal<CrosstermBackend<Stdout>>;
 
@@ -45,6 +43,8 @@ async fn main() -> Result<()> {
     spawn_key_thread(tx.clone());
     spawn_tick(tx.clone());
 
+    let mut app = App::new();
+
     loop {
         term.draw(|f| {
             use ratatui::widgets::{Block, Borders, Paragraph};
@@ -55,12 +55,12 @@ async fn main() -> Result<()> {
         })?;
 
         match rx.recv().await {
-            Some(AppEvent::Key(k)) if k.kind == KeyEventKind::Press => {
-                if matches!(k.code, KeyCode::Char('q') | KeyCode::Esc) {
+            Some(ev) => {
+                app.update(ev);
+                if app.should_quit {
                     break;
                 }
             }
-            Some(_) => {}
             None => break,
         }
     }
