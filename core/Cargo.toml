@@ -1,0 +1,19 @@
+[package]
+name = "spfy-core"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+chrono.workspace = true
+directories.workspace = true
+
+librespot       = { version = "0.8", default-features = false, features = ["rodio-backend"] }
+librespot-oauth = "0.8"
+rspotify        = { version = "0.15", default-features = false, features = ["client-reqwest", "reqwest-rustls-tls"] }
+rodio           = "0.20"
