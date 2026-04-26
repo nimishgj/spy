@@ -121,25 +121,87 @@ impl App {
                     SectionId::Recent => self.recent = SectionState::Failed(msg),
                 }
             }
+            AppEvent::DetailLoaded { title, tracks } => {
+                let prev = std::mem::replace(
+                    &mut self.mode,
+                    Mode::Library { tab: LibTab::Liked, list: ListState::default() },
+                );
+                self.mode = Mode::Detail {
+                    title,
+                    tracks,
+                    list: ListState::default(),
+                    back: Box::new(prev),
+                };
+            }
+            AppEvent::DetailFailed(msg) => {
+                self.toast = Some((Instant::now(), format!("Failed: {msg}")));
+            }
             _ => {}
         }
     }
 
     fn handle_key(&mut self, k: crossterm::event::KeyEvent) {
-        // Quit (any non-Search mode)
-        if !matches!(self.mode, Mode::Search { .. })
+        // Esc in Detail mode: go back to previous mode.
+        if matches!(k.code, KeyCode::Esc) {
+            if let Mode::Detail { back, .. } = &mut self.mode {
+                let back_mode = std::mem::replace(
+                    back.as_mut(),
+                    Mode::Library { tab: LibTab::Liked, list: ListState::default() },
+                );
+                self.mode = back_mode;
+                return;
+            }
+        }
+
+        // Quit on q/Esc in Library mode (Search has its own handling later).
+        if matches!(self.mode, Mode::Library { .. })
             && (matches!(k.code, KeyCode::Char('q')) || matches!(k.code, KeyCode::Esc))
         {
             self.should_quit = true;
             return;
         }
 
-        let lib_len = if let Mode::Library { tab, .. } = &self.mode {
-            Some(self.section_len(*tab))
-        } else { None };
+        // q in Detail also quits (Esc already handled above).
+        if matches!(self.mode, Mode::Detail { .. }) && matches!(k.code, KeyCode::Char('q')) {
+            self.should_quit = true;
+            return;
+        }
 
-        // Tab navigation + cursor movement in Library mode
+        // Phase 1: snapshot Library state for borrow-free decisions.
+        let lib_state = if let Mode::Library { tab, list } = &self.mode {
+            Some((*tab, list.selected(), self.section_len(*tab)))
+        } else {
+            None
+        };
+
+        // Phase 2a: handle Enter in Library mode (pushes a UiAction; no
+        // mutable borrow of self.mode held while pushing to self.pending).
+        if let Some((tab, sel, _len)) = lib_state {
+            if matches!(k.code, KeyCode::Enter) {
+                match (tab, sel) {
+                    (LibTab::Albums, Some(idx)) => {
+                        if let SectionState::Loaded(v) = &self.albums {
+                            if let Some(a) = v.get(idx) {
+                                self.pending.push(UiAction::LoadAlbumTracks(a.id.clone()));
+                            }
+                        }
+                    }
+                    (LibTab::Playlists, Some(idx)) => {
+                        if let SectionState::Loaded(v) = &self.playlists {
+                            if let Some(p) = v.get(idx) {
+                                self.pending.push(UiAction::LoadPlaylistTracks(p.id.clone()));
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+                return;
+            }
+        }
+
+        // Phase 2b: tab/cursor mutation in Library mode.
         if let Mode::Library { tab, list } = &mut self.mode {
+            let lib_len = lib_state.map(|(_, _, l)| l);
             match (k.code, k.modifiers) {
                 (KeyCode::Tab, m) if !m.contains(KeyModifiers::SHIFT) => *tab = tab.next(),
                 (KeyCode::BackTab, _) => *tab = tab.previous(),

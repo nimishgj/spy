@@ -11,6 +11,11 @@ pub enum AppEvent {
     Player(PlayerEvent),
     LibraryLoaded(LibrarySection),
     LibraryFailed(SectionId, String),
+    DetailLoaded {
+        title: String,
+        tracks: Vec<spfy_core::model::Track>,
+    },
+    DetailFailed(String),
 }
 
 #[derive(Debug, Clone, Copy)]

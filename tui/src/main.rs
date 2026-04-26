@@ -109,7 +109,38 @@ async fn main() -> Result<()> {
                 }
                 let actions: Vec<_> = std::mem::take(&mut app.pending);
                 for action in actions {
-                    let _ = action; // Tasks 22-24 will fill this in
+                    use spfy::app::UiAction;
+                    use spfy::event::AppEvent;
+                    match action {
+                        UiAction::LoadAlbumTracks(id) => {
+                            let api2 = api.clone();
+                            let tx2 = tx.clone();
+                            tokio::spawn(async move {
+                                let _ = match api2.album_tracks(&id).await {
+                                    Ok(tracks) => tx2.send(AppEvent::DetailLoaded {
+                                        title: "Album".to_string(),
+                                        tracks,
+                                    }),
+                                    Err(e) => tx2.send(AppEvent::DetailFailed(e.to_string())),
+                                };
+                            });
+                        }
+                        UiAction::LoadPlaylistTracks(id) => {
+                            let api2 = api.clone();
+                            let tx2 = tx.clone();
+                            tokio::spawn(async move {
+                                let _ = match api2.playlist_tracks(&id).await {
+                                    Ok(tracks) => tx2.send(AppEvent::DetailLoaded {
+                                        title: "Playlist".to_string(),
+                                        tracks,
+                                    }),
+                                    Err(e) => tx2.send(AppEvent::DetailFailed(e.to_string())),
+                                };
+                            });
+                        }
+                        // Other UiAction variants will be wired in Task 23/24.
+                        _ => {}
+                    }
                 }
             }
             None => break,
