@@ -51,17 +51,46 @@ persists.
 ID, which is in Development Mode and only authorizes a small number of
 users — running against your own client_id is the right choice.)
 
-### 3. Build and run
+### 3. Install
+
+#### Option A: `cargo install` (recommended)
+
+```bash
+cargo install --git https://github.com/nimishgj/spfy spfy --locked
+```
+
+Compiles spfy and drops the `spfy` binary in `~/.cargo/bin/`. Make sure
+`~/.cargo/bin` is on your `PATH`. First compile takes a few minutes
+(librespot + rspotify + ratatui have a lot of dependencies).
+
+#### Option B: build from source
 
 ```bash
 git clone https://github.com/nimishgj/spfy.git
 cd spfy
-cargo run --release -p spfy
+cargo build --release
+# binary lives at ./target/release/spfy
 ```
 
-First run opens two browser tabs for OAuth (one for streaming via
-librespot, one for the Web API). Click **Agree** on both. Tokens cache
-under `~/Library/Application Support/spfy/`; subsequent runs are silent.
+To put the locally-built binary on your PATH:
+
+```bash
+cargo install --path tui --locked
+```
+
+#### Option C: pre-built binary
+
+Not yet — planned for the first GitHub Release.
+
+### 4. First run
+
+```bash
+spfy
+```
+
+Two browser tabs open for OAuth (one for streaming via librespot, one
+for the Web API). Click **Agree** on both. Tokens cache under
+`~/Library/Application Support/spfy/`; subsequent runs are silent.
 
 ## Usage
 
@@ -113,7 +142,7 @@ Design and implementation plan:
 tail -f ~/Library/Application\ Support/spfy/spfy.log
 ```
 
-Override level: `RUST_LOG=spfy=debug,librespot=warn cargo run -p spfy`.
+Override level: `RUST_LOG=spfy=debug,librespot=warn spfy`.
 
 ## Vendored dependencies
 
