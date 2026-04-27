@@ -16,8 +16,15 @@ use tracing::info;
 use crate::error::{CoreError, Result};
 use crate::paths;
 
-/// PASTE YOUR DEVELOPER CLIENT ID HERE after registering at developer.spotify.com.
-pub const SPFY_CLIENT_ID: &str = "84872059dc8545d9a664db22fa217733";
+/// Default Spotify developer client_id used when `SPFY_CLIENT_ID` is unset.
+/// This is the author's dev-app, which is in Development Mode and only
+/// authorizes a small allowlist of users; downstream users should register
+/// their own app at developer.spotify.com and export `SPFY_CLIENT_ID`.
+const DEFAULT_SPFY_CLIENT_ID: &str = "84872059dc8545d9a664db22fa217733";
+
+fn spfy_client_id() -> String {
+    std::env::var("SPFY_CLIENT_ID").unwrap_or_else(|_| DEFAULT_SPFY_CLIENT_ID.to_string())
+}
 
 /// Spotify's official desktop-app client_id, used by librespot to authenticate
 /// as a Spotify Connect device. Standard librespot practice — not a secret.
@@ -125,7 +132,7 @@ pub fn rspotify_token() -> Result<StoredToken> {
     }
 
     info!("running OAuth flow for rspotify token");
-    let token = run_oauth(SPFY_CLIENT_ID, API_SCOPES)?;
+    let token = run_oauth(&spfy_client_id(), API_SCOPES)?;
     let stored = map_token(token);
     persist_rspotify_token(&path, &stored)?;
     Ok(stored)
@@ -133,7 +140,7 @@ pub fn rspotify_token() -> Result<StoredToken> {
 
 fn refresh_with_token(refresh_token: &str) -> Result<StoredToken> {
     let redirect = random_redirect_uri()?;
-    let builder = OAuthClientBuilder::new(SPFY_CLIENT_ID, &redirect, API_SCOPES.to_vec());
+    let builder = OAuthClientBuilder::new(&spfy_client_id(), &redirect, API_SCOPES.to_vec());
     let client = builder.build().map_err(|e| CoreError::Auth(e.to_string()))?;
     let token = client
         .refresh_token(refresh_token)
@@ -176,7 +183,7 @@ pub fn login() -> Result<Session> {
     };
 
     let creds = RspotifyCredentials {
-        id: SPFY_CLIENT_ID.to_string(),
+        id: spfy_client_id(),
         secret: None,
     };
     let config = RspotifyConfig {
