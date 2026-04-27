@@ -54,8 +54,8 @@ users — running against your own client_id is the right choice.)
 ### 3. Build and run
 
 ```bash
-git clone https://github.com/nimishgj/spotify-cli.git
-cd spotify-cli
+git clone https://github.com/nimishgj/spfy.git
+cd spfy
 cargo run --release -p spfy
 ```
 
