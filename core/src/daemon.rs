@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use tokio::io::BufReader;
 use tokio::net::{UnixListener, UnixStream};
-use tokio::sync::{broadcast, mpsc};
+use tokio::sync::{broadcast, mpsc, RwLock};
 use tracing::{info, warn};
 
 use crate::api::SpotifyApi;
@@ -15,6 +15,33 @@ use crate::ipc::{
 };
 use crate::paths;
 use crate::player::{Cmd, Event};
+
+/// Cached "last known" player state, replayed to fresh clients on connect so a
+/// TUI re-attaching to a daemon already mid-playback doesn't show
+/// "(nothing playing)".
+#[derive(Clone, Default)]
+struct LastState {
+    /// The most recent `Event::Started` (with full metadata).
+    started: Option<Event>,
+    /// Whether playback is currently `Resumed` (`true`) or `Paused` (`false`).
+    is_playing: bool,
+    /// Latest `Event::Position` value seen.
+    position_ms: u32,
+    /// Latest volume; 70 by default.
+    #[allow(dead_code)]
+    volume: u8,
+}
+
+impl LastState {
+    fn new() -> Self {
+        Self {
+            started: None,
+            is_playing: false,
+            position_ms: 0,
+            volume: 70,
+        }
+    }
+}
 
 /// Run the daemon: log in, spawn the player, bind the socket, accept clients.
 ///
@@ -43,12 +70,37 @@ pub async fn run() -> anyhow::Result<()> {
     // Broadcast channel fans out player events to every connected client.
     let (event_tx, _) = broadcast::channel::<Event>(64);
 
-    // Forwarder task: drain player events into the broadcast channel.
+    // Cache the most recent player state so we can replay it to clients that
+    // attach mid-playback (otherwise their reducer never sees `Started` and
+    // shows "(nothing playing)").
+    let last_state: Arc<RwLock<LastState>> = Arc::new(RwLock::new(LastState::new()));
+
+    // Forwarder task: update the cache, then drain player events into the
+    // broadcast channel.
     {
         let event_tx = event_tx.clone();
+        let last_state = last_state.clone();
         let mut player_events = player_events;
         tokio::spawn(async move {
             while let Some(ev) = player_events.recv().await {
+                {
+                    let mut state = last_state.write().await;
+                    match &ev {
+                        Event::Started { .. } => {
+                            state.started = Some(ev.clone());
+                            state.position_ms = 0;
+                        }
+                        Event::Resumed => state.is_playing = true,
+                        Event::Paused => state.is_playing = false,
+                        Event::Position(ms) => state.position_ms = *ms,
+                        Event::Stopped => {
+                            state.started = None;
+                            state.is_playing = false;
+                            state.position_ms = 0;
+                        }
+                        _ => {}
+                    }
+                }
                 let _ = event_tx.send(ev);
             }
         });
@@ -77,9 +129,12 @@ pub async fn run() -> anyhow::Result<()> {
                 let cmd_tx = cmd_tx.clone();
                 let event_rx = event_tx.subscribe();
                 let shutdown_tx = shutdown_tx.clone();
+                let last_state = last_state.clone();
                 tokio::spawn(async move {
-                    if let Err(e) =
-                        handle_client(stream, api, cmd_tx, event_rx, shutdown_tx).await
+                    if let Err(e) = handle_client(
+                        stream, api, cmd_tx, event_rx, shutdown_tx, last_state,
+                    )
+                    .await
                     {
                         warn!("client task ended: {e}");
                     }
@@ -101,9 +156,46 @@ async fn handle_client(
     cmd_tx: mpsc::UnboundedSender<Cmd>,
     mut event_rx: broadcast::Receiver<Event>,
     shutdown_tx: mpsc::Sender<()>,
+    last_state: Arc<RwLock<LastState>>,
 ) -> anyhow::Result<()> {
     let (read_half, mut write_half) = stream.into_split();
     let mut reader = BufReader::new(read_half);
+
+    // Replay the daemon's cached "last known" player state to the new client,
+    // so a TUI attaching mid-playback immediately sees the current track,
+    // play/pause state, and position. The reducer treats these identically to
+    // live events.
+    {
+        let snapshot = last_state.read().await.clone();
+        if let Some(started) = snapshot.started {
+            let env = Envelope {
+                id: 0,
+                msg: DaemonMsg::PlayerEvent(started),
+            };
+            if write_envelope(&mut write_half, &env).await.is_err() {
+                return Ok(());
+            }
+            let cur_state_event = if snapshot.is_playing {
+                Event::Resumed
+            } else {
+                Event::Paused
+            };
+            let env = Envelope {
+                id: 0,
+                msg: DaemonMsg::PlayerEvent(cur_state_event),
+            };
+            if write_envelope(&mut write_half, &env).await.is_err() {
+                return Ok(());
+            }
+            let env = Envelope {
+                id: 0,
+                msg: DaemonMsg::PlayerEvent(Event::Position(snapshot.position_ms)),
+            };
+            if write_envelope(&mut write_half, &env).await.is_err() {
+                return Ok(());
+            }
+        }
+    }
 
     loop {
         tokio::select! {

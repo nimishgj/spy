@@ -83,7 +83,13 @@ pub enum Cmd {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Event {
-    Started { track: TrackId, duration_ms: u32 },
+    Started {
+        track: TrackId,
+        name: String,
+        artists: Vec<String>,
+        album: String,
+        duration_ms: u32,
+    },
     Resumed,
     Paused,
     Position(u32),
@@ -275,32 +281,40 @@ async fn run(
                     let dur = audio_item.duration_ms;
                     anchor = Some((Instant::now(), 0));
 
+                    let name = audio_item.name.clone();
+                    let (artists_vec, album) = match &audio_item.unique_fields {
+                        UniqueFields::Track { artists, album, .. } => (
+                            artists
+                                .0
+                                .iter()
+                                .map(|a| a.name.clone())
+                                .collect::<Vec<String>>(),
+                            album.clone(),
+                        ),
+                        UniqueFields::Local {
+                            artists, album, ..
+                        } => (
+                            artists
+                                .clone()
+                                .map(|s| vec![s])
+                                .unwrap_or_default(),
+                            album.clone().unwrap_or_default(),
+                        ),
+                        UniqueFields::Episode { show_name, .. } => {
+                            (vec![show_name.clone()], String::new())
+                        }
+                    };
+
                     // Push metadata to macOS Now Playing widget.
                     if let Some(mc) = media_controls.as_mut() {
-                        let title = audio_item.name.clone();
-                        let (artist, album) = match &audio_item.unique_fields {
-                            UniqueFields::Track { artists, album, .. } => {
-                                let names: Vec<&str> =
-                                    artists.0.iter().map(|a| a.name.as_str()).collect();
-                                (names.join(", "), album.clone())
-                            }
-                            UniqueFields::Local {
-                                artists, album, ..
-                            } => (
-                                artists.clone().unwrap_or_default(),
-                                album.clone().unwrap_or_default(),
-                            ),
-                            UniqueFields::Episode { show_name, .. } => {
-                                (show_name.clone(), String::new())
-                            }
-                        };
+                        let artist_joined = artists_vec.join(", ");
                         let cover_url = audio_item
                             .covers
                             .first()
                             .map(|c| c.url.clone());
                         mc.set_metadata(MediaMetadata {
-                            title: Some(title.as_str()),
-                            artist: Some(artist.as_str()),
+                            title: Some(name.as_str()),
+                            artist: Some(artist_joined.as_str()),
                             album: Some(album.as_str()),
                             cover_url: cover_url.as_deref(),
                             duration: Some(Duration::from_millis(dur as u64)),
@@ -309,7 +323,13 @@ async fn run(
                         mc.set_playback(MediaPlayback::Playing { progress: None }).ok();
                     }
 
-                    let _ = event_tx.send(Event::Started { track: id, duration_ms: dur });
+                    let _ = event_tx.send(Event::Started {
+                        track: id,
+                        name,
+                        artists: artists_vec,
+                        album,
+                        duration_ms: dur,
+                    });
                 }
                 PlayerEvent::Playing { position_ms, .. } => {
                     anchor = Some((Instant::now(), position_ms));

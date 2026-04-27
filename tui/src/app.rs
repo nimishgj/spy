@@ -152,15 +152,13 @@ impl App {
             AppEvent::Player(ev) => {
                 use spfy_core::player::Event as P;
                 match ev {
-                    P::Started { track, duration_ms } => {
-                        self.now_playing = self.find_track_by_id(&track).or_else(|| {
-                            Some(Track {
-                                id: track.clone(),
-                                name: track.0.clone(),
-                                artists: Vec::new(),
-                                album: String::new(),
-                                duration_ms,
-                            })
+                    P::Started { track, name, artists, album, duration_ms } => {
+                        self.now_playing = Some(Track {
+                            id: track,
+                            name,
+                            artists,
+                            album,
+                            duration_ms,
                         });
                         self.is_playing = true;
                         self.position_ms = 0;
@@ -187,6 +185,7 @@ impl App {
         }
     }
 
+    #[allow(dead_code)]
     fn find_track_by_id(&self, id: &TrackId) -> Option<Track> {
         let in_section = |s: &SectionState<Vec<Track>>| -> Option<Track> {
             if let SectionState::Loaded(v) = s {
