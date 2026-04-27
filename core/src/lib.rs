@@ -6,3 +6,5 @@ pub mod paths;
 pub mod auth;
 pub mod api;
 pub mod player;
+pub mod ipc;
+pub mod daemon;

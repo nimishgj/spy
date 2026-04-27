@@ -40,6 +40,22 @@ librespot, one for the Web API). Tokens cache under
 9. `Esc` exits search or Detail view.
 10. `q` quits cleanly (terminal restored).
 
+## Daemon mode
+
+`spfy` runs as a small client/daemon pair so playback survives closing the
+TUI. The daemon owns the librespot session, the Web API client, and the
+in-memory library cache; the TUI is a thin frontend that talks to it over a
+Unix domain socket at
+`~/Library/Application Support/spfy/daemon.sock`.
+
+- `spfy` — auto-spawns the daemon if not already running, then attaches a TUI
+  to it. Press `q` to quit the TUI; **music keeps playing**.
+- `spfy` (run again from a fresh shell) — re-attaches a new TUI to the same
+  daemon, including the now-playing track.
+- `spfy --stop` — quits the daemon cleanly (stops playback).
+- `spfy --daemon` — runs only the daemon (no TUI). Mostly an internal flag;
+  invoked automatically by `spfy` on first launch.
+
 ## Media keys / Now Playing
 
 spfy registers with macOS's `MPRemoteCommandCenter`, so the F7/F8/F9 hardware

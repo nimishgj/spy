@@ -13,6 +13,7 @@ use librespot::playback::config::{AudioFormat, PlayerConfig, VolumeCtrl};
 use librespot::playback::mixer::softmixer::SoftMixer;
 use librespot::playback::mixer::{Mixer, MixerConfig};
 use librespot::playback::player::{Player, PlayerEvent};
+use serde::{Deserialize, Serialize};
 use souvlaki::{
     MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback, PlatformConfig,
 };
@@ -68,7 +69,7 @@ pub mod queue {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Cmd {
     Play(TrackId),
     PlayContext { uris: Vec<TrackId>, start: usize },
@@ -80,7 +81,7 @@ pub enum Cmd {
     Quit,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Event {
     Started { track: TrackId, duration_ms: u32 },
     Resumed,
@@ -105,6 +106,10 @@ impl PlayerHandle {
         self.event_rx
             .take()
             .expect("PlayerHandle::take_events called twice")
+    }
+
+    pub fn cmd_sender(&self) -> mpsc::UnboundedSender<Cmd> {
+        self.cmd_tx.clone()
     }
 }
 
