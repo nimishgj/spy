@@ -1,98 +1,141 @@
 # spfy
 
-A small Rust TUI Spotify client. Browse your library, search, play music.
-Inspired by ncspot.
+A small Rust TUI Spotify client. Browse your library, search tracks, and
+play music — all from your terminal. Inspired by [ncspot], with a smaller
+scope and a daemon mode that keeps playback alive after you close the UI.
+
+[ncspot]: https://github.com/hrkfdn/ncspot
+
+## Features
+
+- Browse your library: Liked Songs, Saved Albums, Playlists, Followed
+  Artists, Recently Played
+- Drill into albums and playlists to play individual tracks
+- Search Spotify's catalog and play results
+- Standard playback controls: play, pause, next, previous, volume
+- macOS media-key integration (F7/F8/F9, headphone in-line buttons,
+  Now Playing widget)
+- **Daemon mode**: close the TUI, music keeps playing. Reopen anytime
+  to reattach.
 
 ## Requirements
 
 - macOS (Linux/Windows untested in v1)
-- Spotify **Premium** account
-- A Spotify Developer app (one-time setup)
+- Spotify **Premium** account (Spotify gates programmatic playback to
+  Premium subscribers)
+- Rust 1.85 or newer (edition 2024). Latest stable recommended.
 
 ## Setup
 
+### 1. Register a Spotify Developer app
+
 1. Visit https://developer.spotify.com/dashboard.
-2. Click **Create app**. Name `spfy`, redirect URI `http://127.0.0.1:8888/login`,
-   API: Web API.
-3. Add your Spotify account email to the app's user list (apps default to
-   "Development Mode" with a 25-user cap).
-4. Open `core/src/auth.rs` and replace the placeholder in `SPFY_CLIENT_ID` with
-   the client_id shown on the dashboard.
+2. Click **Create app**. Name: `spfy` (or anything). Redirect URI:
+   `http://127.0.0.1:8888/login`. Tick **Web API**.
+3. Add your Spotify account email under **User Management** (apps default
+   to "Development Mode" with a 25-user cap).
+4. Copy the **Client ID** from the dashboard.
 
-## Build & run
+### 2. Tell spfy your client_id
 
-    cargo run --release -p spfy
+Either set an environment variable (recommended):
 
-First run opens two browser pop-ups for OAuth (one for streaming via
-librespot, one for the Web API). Tokens cache under
-`~/Library/Application Support/spfy/`. Subsequent runs are silent.
+```bash
+export SPFY_CLIENT_ID="your-client-id-here"
+```
 
-## Smoke test
+Or add it to your shell rc (`~/.zshrc`, `~/.bashrc`, etc.) so it
+persists.
 
-1. Launch — TUI shows tabs (Liked / Albums / Playlists / Artists / Recent).
-2. `j`/`k` (or arrow keys) navigate.
-3. `Tab` / `Shift+Tab` cycles tabs.
-4. `Enter` on a Liked track — audio plays.
-5. `p` pauses, `p` again resumes.
-6. `n` / `b` skip / previous.
-7. `+` / `-` change volume.
-8. `/` enters search; type a query, `Enter`; `↑`/`↓` and `Enter` to play.
-9. `Esc` exits search or Detail view.
-10. `q` quits cleanly (terminal restored).
+(If `SPFY_CLIENT_ID` is unset, spfy falls back to the author's dev-app
+ID, which is in Development Mode and only authorizes a small number of
+users — running against your own client_id is the right choice.)
+
+### 3. Build and run
+
+```bash
+git clone https://github.com/nimishgj/spotify-cli.git
+cd spotify-cli
+cargo run --release -p spfy
+```
+
+First run opens two browser tabs for OAuth (one for streaming via
+librespot, one for the Web API). Click **Agree** on both. Tokens cache
+under `~/Library/Application Support/spfy/`; subsequent runs are silent.
+
+## Usage
+
+| Key | Action |
+|---|---|
+| `j` / `k` (or `↓` / `↑`) | Cursor up/down |
+| `h` / `l` (or `←` / `→`, `Tab`/`Shift+Tab`) | Switch library tab |
+| `Enter` | Play track / drill into album/playlist |
+| `Esc` | Back out of detail or search view |
+| `p` / `Space` | Toggle play/pause |
+| `n` / `b` | Next / previous track |
+| `+` / `-` | Volume up/down |
+| `/` | Enter search mode |
+| `q` | Quit (daemon keeps playing) |
 
 ## Daemon mode
 
-`spfy` runs as a small client/daemon pair so playback survives closing the
-TUI. The daemon owns the librespot session, the Web API client, and the
-in-memory library cache; the TUI is a thin frontend that talks to it over a
-Unix domain socket at
-`~/Library/Application Support/spfy/daemon.sock`.
+`spfy` automatically runs as a foreground TUI client connected to a
+background daemon. The daemon owns the librespot session, the Web API
+client, and a library cache. Closing the TUI does NOT stop playback —
+you can reopen anytime and attach a fresh TUI to the same daemon.
 
-- `spfy` — auto-spawns the daemon if not already running, then attaches a TUI
-  to it. Press `q` to quit the TUI; **music keeps playing**.
-- `spfy` (run again from a fresh shell) — re-attaches a new TUI to the same
-  daemon, including the now-playing track.
-- `spfy --stop` — quits the daemon cleanly (stops playback).
-- `spfy --daemon` — runs only the daemon (no TUI). Mostly an internal flag;
-  invoked automatically by `spfy` on first launch.
-
-## Media keys / Now Playing
-
-spfy registers with macOS's `MPRemoteCommandCenter`, so the F7/F8/F9 hardware
-keys, headphone in-line controls, and the Control Center / lock-screen Now
-Playing widget all control playback. Track title, artist, album, and duration
-are pushed to the Now Playing widget on every track change.
-
-Caveat: because spfy runs as a plain CLI binary (not bundled as an `.app` with
-an `Info.plist`), macOS attributes the Now Playing entry to your terminal
-emulator rather than to spfy itself. Media-key control still works; only the
-displayed app name/icon are affected. Wrapping the binary in a minimal `.app`
-bundle is out of scope for now.
-
-## Logs
-
-`~/Library/Application Support/spfy/spfy.log`. Override level with
-`RUST_LOG`, e.g.:
-
-    RUST_LOG=spfy=debug,librespot=warn cargo run -p spfy
+```bash
+spfy            # run TUI; spawns daemon if not already running
+spfy --stop     # quit the daemon (stops music)
+spfy --daemon   # run only the daemon (rare; usually auto-spawned)
+```
 
 ## Architecture
 
 Cargo workspace, two crates:
 
-- `core/` (`spfy-core`) — auth, Spotify Web API wrapper, librespot player worker.
-- `tui/` (`spfy`) — ratatui TUI.
+- `core/` (`spfy-core`) — library: auth (librespot OAuth + rspotify), Web
+  API wrapper, librespot player worker, IPC protocol, daemon entrypoint.
+- `tui/` (`spfy`) — binary: ratatui TUI, App reducer, daemon-spawning
+  logic, RemoteApi/RemotePlayer facades over Unix-socket IPC.
 
-The TUI imports `spfy-core`'s public model types only; `rspotify` and
-`librespot` types stop at the `core` boundary. The player worker runs as a
-tokio task on the binary's runtime; one extra `std::thread` reads blocking
-crossterm key events.
+Public TUI types only depend on `spfy_core::model` — rspotify and
+librespot types stop at the core boundary. The frontend talks to the
+daemon over a Unix-domain socket using line-delimited JSON envelopes.
 
-Design and implementation plan: `docs/plans/2026-04-26-spfy-design.md` and
-`docs/plans/2026-04-26-spfy-implementation.md`.
+Design and implementation plan:
+- `docs/plans/2026-04-26-spfy-design.md`
+- `docs/plans/2026-04-26-spfy-implementation.md`
+
+## Logs
+
+```bash
+tail -f ~/Library/Application\ Support/spfy/spfy.log
+```
+
+Override level: `RUST_LOG=spfy=debug,librespot=warn cargo run -p spfy`.
+
+## Vendored dependencies
+
+`vendored/rspotify-model/` is a local fork of [rspotify-model] 0.16.1 with
+two `#[serde(default)]` annotations added to fields Spotify sometimes
+omits (`FullTrack.external_ids`, `FullAlbum.external_ids`). License
+preserved from upstream.
+
+[rspotify-model]: https://github.com/ramsayleung/rspotify
 
 ## Status
 
-v1: read-only library, search, playback. Out of scope for v1: repeat /
-shuffle, lyrics, editable queue, library write operations, Spotify Connect
-device transfer, IPC / mpris, podcasts, Linux/Windows audio backends.
+v1: read-only library, search, playback, daemon mode, media keys.
+
+**Out of scope for v1**: repeat / shuffle, lyrics, editable queue,
+library write operations, Spotify Connect device transfer, podcasts,
+Linux/Windows audio backends, packaged .app bundle.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## License
+
+MIT. See [LICENSE](LICENSE).
