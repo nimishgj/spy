@@ -159,7 +159,7 @@ impl SpotifyApi {
                 .map_err(|e| CoreError::Api(e.to_string()))?;
             let len = page.items.len() as u32;
             for item in page.items {
-                if let Some(rspotify::model::PlayableItem::Track(t)) = item.track {
+                if let Some(rspotify::model::PlayableItem::Track(t)) = item.item {
                     out.push(convert::full_track_to_model(t));
                 }
             }
@@ -220,7 +220,7 @@ pub mod convert {
             id: PlaylistId(p.id.to_string()),
             name: p.name,
             owner: p.owner.display_name.unwrap_or_default(),
-            track_count: p.tracks.total,
+            track_count: p.items.total,
         }
     }
 
