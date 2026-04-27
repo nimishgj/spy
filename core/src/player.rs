@@ -7,11 +7,15 @@ use librespot::core::cache::Cache;
 use librespot::core::config::SessionConfig;
 use librespot::core::session::Session;
 use librespot::core::spotify_uri::SpotifyUri;
+use librespot::metadata::audio::item::UniqueFields;
 use librespot::playback::audio_backend;
 use librespot::playback::config::{AudioFormat, PlayerConfig, VolumeCtrl};
 use librespot::playback::mixer::softmixer::SoftMixer;
 use librespot::playback::mixer::{Mixer, MixerConfig};
 use librespot::playback::player::{Player, PlayerEvent};
+use souvlaki::{
+    MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback, PlatformConfig,
+};
 use tokio::runtime::Handle;
 use tokio::sync::mpsc;
 use tracing::{info, warn};
@@ -108,8 +112,9 @@ pub fn spawn(creds: Credentials, rt: Handle) -> PlayerHandle {
     let (cmd_tx, cmd_rx) = mpsc::unbounded_channel::<Cmd>();
     let (event_tx, event_rx) = mpsc::unbounded_channel::<Event>();
 
+    let internal_cmd_tx = cmd_tx.clone();
     rt.spawn(async move {
-        if let Err(e) = run(creds, cmd_rx, event_tx.clone()).await {
+        if let Err(e) = run(creds, cmd_rx, event_tx.clone(), internal_cmd_tx).await {
             let _ = event_tx.send(Event::Error(e.to_string()));
         }
     });
@@ -131,6 +136,7 @@ async fn run(
     creds: Credentials,
     mut cmd_rx: mpsc::UnboundedReceiver<Cmd>,
     event_tx: mpsc::UnboundedSender<Event>,
+    internal_cmd_tx: mpsc::UnboundedSender<Cmd>,
 ) -> anyhow::Result<()> {
     let cache_dir = paths::librespot_cache_dir()?;
     let cache = Cache::new(
@@ -177,6 +183,38 @@ async fn run(
     let mut anchor: Option<(Instant, u32)> = None;
     let mut playing = false;
     let mut tick = tokio::time::interval(Duration::from_millis(500));
+
+    // ---- macOS media-key / Now Playing widget integration ----
+    let mut media_controls = match MediaControls::new(PlatformConfig {
+        dbus_name: "spfy",
+        display_name: "spfy",
+        hwnd: None,
+    }) {
+        Ok(c) => Some(c),
+        Err(e) => {
+            warn!("media controls init failed: {e:?}");
+            None
+        }
+    };
+    if let Some(mc) = media_controls.as_mut() {
+        let media_tx = internal_cmd_tx.clone();
+        if let Err(e) = mc.attach(move |event: MediaControlEvent| {
+            let cmd = match event {
+                MediaControlEvent::Play
+                | MediaControlEvent::Pause
+                | MediaControlEvent::Toggle => Some(Cmd::Toggle),
+                MediaControlEvent::Next => Some(Cmd::Next),
+                MediaControlEvent::Previous => Some(Cmd::Previous),
+                MediaControlEvent::Stop => Some(Cmd::Toggle),
+                _ => None,
+            };
+            if let Some(c) = cmd {
+                let _ = media_tx.send(c);
+            }
+        }) {
+            warn!("media controls attach failed: {e:?}");
+        }
+    }
 
     loop {
         tokio::select! {
@@ -231,16 +269,57 @@ async fn run(
                     let id = TrackId(audio_item.track_id.to_uri().unwrap_or_default());
                     let dur = audio_item.duration_ms;
                     anchor = Some((Instant::now(), 0));
+
+                    // Push metadata to macOS Now Playing widget.
+                    if let Some(mc) = media_controls.as_mut() {
+                        let title = audio_item.name.clone();
+                        let (artist, album) = match &audio_item.unique_fields {
+                            UniqueFields::Track { artists, album, .. } => {
+                                let names: Vec<&str> =
+                                    artists.0.iter().map(|a| a.name.as_str()).collect();
+                                (names.join(", "), album.clone())
+                            }
+                            UniqueFields::Local {
+                                artists, album, ..
+                            } => (
+                                artists.clone().unwrap_or_default(),
+                                album.clone().unwrap_or_default(),
+                            ),
+                            UniqueFields::Episode { show_name, .. } => {
+                                (show_name.clone(), String::new())
+                            }
+                        };
+                        let cover_url = audio_item
+                            .covers
+                            .first()
+                            .map(|c| c.url.clone());
+                        mc.set_metadata(MediaMetadata {
+                            title: Some(title.as_str()),
+                            artist: Some(artist.as_str()),
+                            album: Some(album.as_str()),
+                            cover_url: cover_url.as_deref(),
+                            duration: Some(Duration::from_millis(dur as u64)),
+                        })
+                        .ok();
+                        mc.set_playback(MediaPlayback::Playing { progress: None }).ok();
+                    }
+
                     let _ = event_tx.send(Event::Started { track: id, duration_ms: dur });
                 }
                 PlayerEvent::Playing { position_ms, .. } => {
                     anchor = Some((Instant::now(), position_ms));
                     playing = true;
+                    if let Some(mc) = media_controls.as_mut() {
+                        mc.set_playback(MediaPlayback::Playing { progress: None }).ok();
+                    }
                     let _ = event_tx.send(Event::Resumed);
                 }
                 PlayerEvent::Paused { position_ms, .. } => {
                     anchor = Some((Instant::now(), position_ms));
                     playing = false;
+                    if let Some(mc) = media_controls.as_mut() {
+                        mc.set_playback(MediaPlayback::Paused { progress: None }).ok();
+                    }
                     let _ = event_tx.send(Event::Paused);
                 }
                 PlayerEvent::EndOfTrack { .. } => {
@@ -249,6 +328,9 @@ async fn run(
                         let _ = load_track(&player, &id);
                     } else {
                         playing = false;
+                        if let Some(mc) = media_controls.as_mut() {
+                            mc.set_playback(MediaPlayback::Stopped).ok();
+                        }
                         let _ = event_tx.send(Event::Stopped);
                     }
                 }
@@ -272,6 +354,9 @@ async fn run(
     }
 
     info!("player worker exiting");
+    if let Some(mc) = media_controls.as_mut() {
+        mc.set_playback(MediaPlayback::Stopped).ok();
+    }
     player.stop();
     Ok(())
 }

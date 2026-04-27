@@ -40,6 +40,19 @@ librespot, one for the Web API). Tokens cache under
 9. `Esc` exits search or Detail view.
 10. `q` quits cleanly (terminal restored).
 
+## Media keys / Now Playing
+
+spfy registers with macOS's `MPRemoteCommandCenter`, so the F7/F8/F9 hardware
+keys, headphone in-line controls, and the Control Center / lock-screen Now
+Playing widget all control playback. Track title, artist, album, and duration
+are pushed to the Now Playing widget on every track change.
+
+Caveat: because spfy runs as a plain CLI binary (not bundled as an `.app` with
+an `Info.plist`), macOS attributes the Now Playing entry to your terminal
+emulator rather than to spfy itself. Media-key control still works; only the
+displayed app name/icon are affected. Wrapping the binary in a minimal `.app`
+bundle is out of scope for now.
+
 ## Logs
 
 `~/Library/Application Support/spfy/spfy.log`. Override level with

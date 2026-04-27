@@ -17,6 +17,7 @@ librespot       = { version = "0.8", default-features = false, features = ["rodi
 librespot-oauth = { version = "0.8", default-features = false, features = ["rustls-tls-native-roots"] }
 rspotify        = { version = "0.16", default-features = false, features = ["client-reqwest", "reqwest-rustls-tls"] }
 rodio           = "0.20"
+souvlaki        = "0.8"
 
 [dev-dependencies]
 tempfile = "3"
