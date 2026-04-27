@@ -1,5 +1,5 @@
 use spfy_core::model::TrackId;
-use spfy_core::player::queue::{Queue, AdvanceResult};
+use spfy_core::player::queue::{AdvanceResult, Queue};
 
 fn ids(strs: &[&str]) -> Vec<TrackId> {
     strs.iter().map(|s| TrackId((*s).into())).collect()
@@ -13,11 +13,11 @@ fn play_context_loads_at_start_index() {
 }
 
 #[test]
-fn next_advances_or_stops() {
+fn advance_advances_or_stops() {
     let mut q = Queue::default();
     q.set(ids(&["a", "b"]), 0);
-    assert_eq!(q.next(), AdvanceResult::Loaded(TrackId("b".into())));
-    assert_eq!(q.next(), AdvanceResult::EndReached);
+    assert_eq!(q.advance(), AdvanceResult::Loaded(TrackId("b".into())));
+    assert_eq!(q.advance(), AdvanceResult::EndReached);
 }
 
 #[test]

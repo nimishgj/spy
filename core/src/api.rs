@@ -1,6 +1,6 @@
+use rspotify::AuthCodeSpotify;
 use rspotify::clients::{BaseClient, OAuthClient};
 use rspotify::model::Market;
-use rspotify::AuthCodeSpotify;
 
 use crate::error::{CoreError, Result};
 use crate::model::*;
@@ -30,8 +30,11 @@ impl SpotifyApi {
             }
             offset += len;
         }
-        saved.sort_by(|a, b| b.added_at.cmp(&a.added_at));
-        Ok(saved.into_iter().map(convert::saved_track_to_model).collect())
+        saved.sort_by_key(|b| std::cmp::Reverse(b.added_at));
+        Ok(saved
+            .into_iter()
+            .map(convert::saved_track_to_model)
+            .collect())
     }
 
     pub async fn saved_albums(&self) -> Result<Vec<Album>> {
@@ -85,10 +88,7 @@ impl SpotifyApi {
                 .current_user_followed_artists(after.as_deref(), Some(50))
                 .await
                 .map_err(|e| CoreError::Api(e.to_string()))?;
-            let next_after = page
-                .cursors
-                .as_ref()
-                .and_then(|c| c.after.clone());
+            let next_after = page.cursors.as_ref().and_then(|c| c.after.clone());
             let len = page.items.len();
             out.extend(page.items.into_iter().map(convert::full_artist_to_model));
             if len == 0 || page.next.is_none() {
@@ -124,7 +124,12 @@ impl SpotifyApi {
         loop {
             let page = self
                 .client
-                .album_track_manual(parsed.clone(), Some(Market::FromToken), Some(50), Some(offset))
+                .album_track_manual(
+                    parsed.clone(),
+                    Some(Market::FromToken),
+                    Some(50),
+                    Some(offset),
+                )
                 .await
                 .map_err(|e| CoreError::Api(e.to_string()))?;
             let len = page.items.len() as u32;
@@ -154,7 +159,13 @@ impl SpotifyApi {
         loop {
             let page = self
                 .client
-                .playlist_items_manual(parsed.clone(), None, Some(Market::FromToken), Some(50), Some(offset))
+                .playlist_items_manual(
+                    parsed.clone(),
+                    None,
+                    Some(Market::FromToken),
+                    Some(50),
+                    Some(offset),
+                )
                 .await
                 .map_err(|e| CoreError::Api(e.to_string()))?;
             let len = page.items.len() as u32;
@@ -174,7 +185,14 @@ impl SpotifyApi {
     pub async fn search_tracks(&self, query: &str, limit: u32) -> Result<Vec<Track>> {
         let result = self
             .client
-            .search(query, rspotify::model::SearchType::Track, Some(Market::FromToken), None, Some(limit), None)
+            .search(
+                query,
+                rspotify::model::SearchType::Track,
+                Some(Market::FromToken),
+                None,
+                Some(limit),
+                None,
+            )
             .await
             .map_err(|e| CoreError::Api(e.to_string()))?;
 
@@ -182,7 +200,10 @@ impl SpotifyApi {
             rspotify::model::SearchResult::Tracks(p) => p.items,
             _ => Vec::new(),
         };
-        Ok(tracks.into_iter().map(convert::full_track_to_model).collect())
+        Ok(tracks
+            .into_iter()
+            .map(convert::full_track_to_model)
+            .collect())
     }
 }
 

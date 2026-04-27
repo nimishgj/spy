@@ -38,22 +38,22 @@ pub enum LibrarySection {
     Recent(Vec<spfy_core::model::PlayHistoryEntry>),
 }
 
-pub fn channel() -> (mpsc::UnboundedSender<AppEvent>, mpsc::UnboundedReceiver<AppEvent>) {
+pub fn channel() -> (
+    mpsc::UnboundedSender<AppEvent>,
+    mpsc::UnboundedReceiver<AppEvent>,
+) {
     mpsc::unbounded_channel()
 }
 
 pub fn spawn_key_thread(tx: mpsc::UnboundedSender<AppEvent>) {
-    std::thread::spawn(move || loop {
-        match event::poll(Duration::from_millis(250)) {
-            Ok(true) => match event::read() {
-                Ok(CtEvent::Key(k)) => {
-                    if tx.send(AppEvent::Key(k)).is_err() {
-                        break;
-                    }
-                }
-                _ => {}
-            },
-            _ => {}
+    std::thread::spawn(move || {
+        loop {
+            if let Ok(true) = event::poll(Duration::from_millis(250))
+                && let Ok(CtEvent::Key(k)) = event::read()
+                && tx.send(AppEvent::Key(k)).is_err()
+            {
+                break;
+            }
         }
     });
 }

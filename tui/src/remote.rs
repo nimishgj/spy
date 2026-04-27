@@ -4,18 +4,16 @@
 //! whether the resources are local or remote.
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use spfy_core::error::{CoreError, Result as CoreResult};
-use spfy_core::ipc::{
-    read_envelope, write_envelope, DaemonMsg, Envelope, FrontendMsg,
-};
+use spfy_core::ipc::{DaemonMsg, Envelope, FrontendMsg, read_envelope, write_envelope};
 use spfy_core::model::*;
 use spfy_core::player::{Cmd, Event};
 use tokio::io::BufReader;
 use tokio::net::UnixStream;
-use tokio::sync::{mpsc, oneshot, Mutex};
+use tokio::sync::{Mutex, mpsc, oneshot};
 
 type Pending = Arc<Mutex<HashMap<u64, oneshot::Sender<DaemonMsg>>>>;
 

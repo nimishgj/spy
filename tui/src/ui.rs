@@ -1,8 +1,8 @@
+use ratatui::Frame;
 use ratatui::layout::{Constraint, Direction, Layout};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::Line;
 use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph, Tabs};
-use ratatui::Frame;
 
 use crate::app::{App, LibTab, Mode, SectionState};
 
@@ -42,13 +42,12 @@ fn render_tabs(f: &mut Frame, area: ratatui::layout::Rect, app: &App) {
                 LibTab::Artists => 3,
                 LibTab::Recent => 4,
             };
-            let tabs =
-                Tabs::new(titles.iter().map(|t| Line::from(*t)).collect::<Vec<_>>())
-                    .block(Block::default().borders(Borders::ALL))
-                    .select(selected)
-                    .highlight_style(
-                        Style::default().add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
-                    );
+            let tabs = Tabs::new(titles.iter().map(|t| Line::from(*t)).collect::<Vec<_>>())
+                .block(Block::default().borders(Borders::ALL))
+                .select(selected)
+                .highlight_style(
+                    Style::default().add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
+                );
             f.render_widget(tabs, area);
         }
         Mode::Detail { title, .. } => {
@@ -57,8 +56,8 @@ fn render_tabs(f: &mut Frame, area: ratatui::layout::Rect, app: &App) {
             f.render_widget(p, area);
         }
         Mode::Search { .. } => {
-            let p = Paragraph::new("← Esc back · Search")
-                .block(Block::default().borders(Borders::ALL));
+            let p =
+                Paragraph::new("← Esc back · Search").block(Block::default().borders(Borders::ALL));
             f.render_widget(p, area);
         }
     }
@@ -88,7 +87,12 @@ fn render_body(f: &mut Frame, area: ratatui::layout::Rect, app: &mut App) {
                 .highlight_symbol("> ");
             f.render_stateful_widget(list_widget, area, list);
         }
-        Mode::Detail { title, tracks, list, .. } => {
+        Mode::Detail {
+            title,
+            tracks,
+            list,
+            ..
+        } => {
             let items: Vec<ListItem> = tracks
                 .iter()
                 .map(|t| ListItem::new(format!("{} — {}", t.name, t.artists.join(", "))))
@@ -99,7 +103,12 @@ fn render_body(f: &mut Frame, area: ratatui::layout::Rect, app: &mut App) {
                 .highlight_symbol("> ");
             f.render_stateful_widget(list_widget, area, list);
         }
-        Mode::Search { input, results, list, .. } => {
+        Mode::Search {
+            input,
+            results,
+            list,
+            ..
+        } => {
             let inner = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([Constraint::Length(3), Constraint::Min(1)])
@@ -125,7 +134,10 @@ fn render_body(f: &mut Frame, area: ratatui::layout::Rect, app: &mut App) {
     }
 }
 
-fn section_items<T>(state: &SectionState<Vec<T>>, fmt: impl Fn(&T) -> String) -> Vec<ListItem<'static>> {
+fn section_items<T>(
+    state: &SectionState<Vec<T>>,
+    fmt: impl Fn(&T) -> String,
+) -> Vec<ListItem<'static>> {
     match state {
         SectionState::Idle => vec![ListItem::new("Idle")],
         SectionState::Loading => vec![ListItem::new("Loading…")],

@@ -14,9 +14,7 @@ use librespot::playback::mixer::softmixer::SoftMixer;
 use librespot::playback::mixer::{Mixer, MixerConfig};
 use librespot::playback::player::{Player, PlayerEvent};
 use serde::{Deserialize, Serialize};
-use souvlaki::{
-    MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback, PlatformConfig,
-};
+use souvlaki::{MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback, PlatformConfig};
 use tokio::runtime::Handle;
 use tokio::sync::mpsc;
 use tracing::{info, warn};
@@ -51,7 +49,7 @@ pub mod queue {
             self.items.get(self.idx)
         }
 
-        pub fn next(&mut self) -> AdvanceResult {
+        pub fn advance(&mut self) -> AdvanceResult {
             if self.idx + 1 >= self.items.len() {
                 return AdvanceResult::EndReached;
             }
@@ -137,8 +135,8 @@ pub fn spawn(creds: Credentials, rt: Handle) -> PlayerHandle {
 }
 
 fn load_track(player: &Arc<Player>, id: &TrackId) -> anyhow::Result<()> {
-    let uri = SpotifyUri::from_uri(&id.0)
-        .map_err(|e| anyhow::anyhow!("bad uri {}: {e:?}", id.0))?;
+    let uri =
+        SpotifyUri::from_uri(&id.0).map_err(|e| anyhow::anyhow!("bad uri {}: {e:?}", id.0))?;
     player.load(uri, true, 0);
     Ok(())
 }
@@ -162,9 +160,7 @@ async fn run(
     info!("connecting to Spotify");
     if let Err(e) = session.connect(creds, true).await {
         let msg = e.to_string();
-        if msg.to_lowercase().contains("premium")
-            || msg.to_lowercase().contains("badcredentials")
-        {
+        if msg.to_lowercase().contains("premium") || msg.to_lowercase().contains("badcredentials") {
             let _ = event_tx.send(Event::Error("Premium account required".into()));
         } else {
             let _ = event_tx.send(Event::Error(format!("connect failed: {msg}")));
@@ -211,9 +207,9 @@ async fn run(
         let media_tx = internal_cmd_tx.clone();
         if let Err(e) = mc.attach(move |event: MediaControlEvent| {
             let cmd = match event {
-                MediaControlEvent::Play
-                | MediaControlEvent::Pause
-                | MediaControlEvent::Toggle => Some(Cmd::Toggle),
+                MediaControlEvent::Play | MediaControlEvent::Pause | MediaControlEvent::Toggle => {
+                    Some(Cmd::Toggle)
+                }
                 MediaControlEvent::Next => Some(Cmd::Next),
                 MediaControlEvent::Previous => Some(Cmd::Previous),
                 MediaControlEvent::Stop => Some(Cmd::Toggle),
@@ -251,7 +247,7 @@ async fn run(
                     if playing { player.pause(); } else { player.play(); }
                 }
                 Cmd::Next => {
-                    if let AdvanceResult::Loaded(id) = queue.next() {
+                    if let AdvanceResult::Loaded(id) = queue.advance() {
                         let _ = load_track(&player, &id);
                         playing = true;
                     } else {
@@ -349,7 +345,7 @@ async fn run(
                 }
                 PlayerEvent::EndOfTrack { .. } => {
                     let _ = event_tx.send(Event::EndOfTrack);
-                    if let AdvanceResult::Loaded(id) = queue.next() {
+                    if let AdvanceResult::Loaded(id) = queue.advance() {
                         let _ = load_track(&player, &id);
                     } else {
                         playing = false;
@@ -361,19 +357,18 @@ async fn run(
                 }
                 PlayerEvent::Unavailable { .. } => {
                     warn!("track unavailable; skipping");
-                    if let AdvanceResult::Loaded(id) = queue.next() {
+                    if let AdvanceResult::Loaded(id) = queue.advance() {
                         let _ = load_track(&player, &id);
                     }
                 }
                 _ => {}
             },
             _ = tick.tick() => {
-                if playing {
-                    if let Some((started, base)) = anchor {
+                if playing
+                    && let Some((started, base)) = anchor {
                         let elapsed = (Instant::now() - started).as_millis() as u32;
                         let _ = event_tx.send(Event::Position(base + elapsed));
                     }
-                }
             }
         }
     }

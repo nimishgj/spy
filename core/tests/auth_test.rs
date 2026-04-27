@@ -1,5 +1,5 @@
 use chrono::{Duration, Utc};
-use spfy_core::auth::{persist_rspotify_token, read_rspotify_token, StoredToken};
+use spfy_core::auth::{StoredToken, persist_rspotify_token, read_rspotify_token};
 
 #[test]
 fn token_json_round_trips_via_temp_file() {

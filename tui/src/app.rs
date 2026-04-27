@@ -2,7 +2,9 @@ use std::time::{Duration, Instant};
 
 use crossterm::event::{KeyCode, KeyEventKind, KeyModifiers};
 use ratatui::widgets::ListState;
-use spfy_core::model::{Album, AlbumId, Artist, PlayHistoryEntry, Playlist, PlaylistId, Track, TrackId};
+use spfy_core::model::{
+    Album, AlbumId, Artist, PlayHistoryEntry, Playlist, PlaylistId, Track, TrackId,
+};
 
 use crate::event::AppEvent;
 
@@ -57,9 +59,22 @@ impl LibTab {
 }
 
 pub enum Mode {
-    Library { tab: LibTab, list: ListState },
-    Detail  { title: String, tracks: Vec<Track>, list: ListState, back: Box<Mode> },
-    Search  { input: String, results: SectionState<Vec<Track>>, list: ListState, back: Box<Mode> },
+    Library {
+        tab: LibTab,
+        list: ListState,
+    },
+    Detail {
+        title: String,
+        tracks: Vec<Track>,
+        list: ListState,
+        back: Box<Mode>,
+    },
+    Search {
+        input: String,
+        results: SectionState<Vec<Track>>,
+        list: ListState,
+        back: Box<Mode>,
+    },
 }
 
 pub struct App {
@@ -68,11 +83,11 @@ pub struct App {
     pub position_ms: u32,
     pub volume: u8,
 
-    pub liked:     SectionState<Vec<Track>>,
-    pub albums:    SectionState<Vec<Album>>,
+    pub liked: SectionState<Vec<Track>>,
+    pub albums: SectionState<Vec<Album>>,
     pub playlists: SectionState<Vec<Playlist>>,
-    pub artists:   SectionState<Vec<Artist>>,
-    pub recent:    SectionState<Vec<PlayHistoryEntry>>,
+    pub artists: SectionState<Vec<Artist>>,
+    pub recent: SectionState<Vec<PlayHistoryEntry>>,
 
     pub mode: Mode,
     pub toast: Option<(Instant, String)>,
@@ -94,7 +109,10 @@ impl App {
             playlists: SectionState::Idle,
             artists: SectionState::Idle,
             recent: SectionState::Idle,
-            mode: Mode::Library { tab: LibTab::Liked, list: ListState::default() },
+            mode: Mode::Library {
+                tab: LibTab::Liked,
+                list: ListState::default(),
+            },
             toast: None,
             fatal: None,
             should_quit: false,
@@ -109,7 +127,9 @@ impl App {
             AppEvent::LibraryLoaded(section) => match section {
                 crate::event::LibrarySection::Liked(v) => self.liked = SectionState::Loaded(v),
                 crate::event::LibrarySection::Albums(v) => self.albums = SectionState::Loaded(v),
-                crate::event::LibrarySection::Playlists(v) => self.playlists = SectionState::Loaded(v),
+                crate::event::LibrarySection::Playlists(v) => {
+                    self.playlists = SectionState::Loaded(v)
+                }
                 crate::event::LibrarySection::Artists(v) => self.artists = SectionState::Loaded(v),
                 crate::event::LibrarySection::Recent(v) => self.recent = SectionState::Loaded(v),
             },
@@ -126,7 +146,10 @@ impl App {
             AppEvent::DetailLoaded { title, tracks } => {
                 let prev = std::mem::replace(
                     &mut self.mode,
-                    Mode::Library { tab: LibTab::Liked, list: ListState::default() },
+                    Mode::Library {
+                        tab: LibTab::Liked,
+                        list: ListState::default(),
+                    },
                 );
                 self.mode = Mode::Detail {
                     title,
@@ -152,7 +175,13 @@ impl App {
             AppEvent::Player(ev) => {
                 use spfy_core::player::Event as P;
                 match ev {
-                    P::Started { track, name, artists, album, duration_ms } => {
+                    P::Started {
+                        track,
+                        name,
+                        artists,
+                        album,
+                        duration_ms,
+                    } => {
                         self.now_playing = Some(Track {
                             id: track,
                             name,
@@ -197,35 +226,41 @@ impl App {
         if let Some(t) = in_section(&self.liked) {
             return Some(t);
         }
-        if let SectionState::Loaded(v) = &self.recent {
-            if let Some(e) = v.iter().find(|e| e.track.id == *id) {
-                return Some(e.track.clone());
-            }
+        if let SectionState::Loaded(v) = &self.recent
+            && let Some(e) = v.iter().find(|e| e.track.id == *id)
+        {
+            return Some(e.track.clone());
         }
-        if let Mode::Detail { tracks, .. } = &self.mode {
-            if let Some(t) = tracks.iter().find(|t| t.id == *id) {
-                return Some(t.clone());
-            }
+        if let Mode::Detail { tracks, .. } = &self.mode
+            && let Some(t) = tracks.iter().find(|t| t.id == *id)
+        {
+            return Some(t.clone());
         }
-        if let Mode::Search { results: SectionState::Loaded(tracks), .. } = &self.mode {
-            if let Some(t) = tracks.iter().find(|t| t.id == *id) {
-                return Some(t.clone());
-            }
+        if let Mode::Search {
+            results: SectionState::Loaded(tracks),
+            ..
+        } = &self.mode
+            && let Some(t) = tracks.iter().find(|t| t.id == *id)
+        {
+            return Some(t.clone());
         }
         None
     }
 
     fn handle_key(&mut self, k: crossterm::event::KeyEvent) {
         // Esc in Detail mode: go back to previous mode.
-        if matches!(k.code, KeyCode::Esc) {
-            if let Mode::Detail { back, .. } = &mut self.mode {
-                let back_mode = std::mem::replace(
-                    back.as_mut(),
-                    Mode::Library { tab: LibTab::Liked, list: ListState::default() },
-                );
-                self.mode = back_mode;
-                return;
-            }
+        if matches!(k.code, KeyCode::Esc)
+            && let Mode::Detail { back, .. } = &mut self.mode
+        {
+            let back_mode = std::mem::replace(
+                back.as_mut(),
+                Mode::Library {
+                    tab: LibTab::Liked,
+                    list: ListState::default(),
+                },
+            );
+            self.mode = back_mode;
+            return;
         }
 
         // Search mode handling: take all input characters; navigate with arrows.
@@ -252,7 +287,10 @@ impl App {
         if matches!(k.code, KeyCode::Char('/')) {
             let prev = std::mem::replace(
                 &mut self.mode,
-                Mode::Library { tab: LibTab::Liked, list: ListState::default() },
+                Mode::Library {
+                    tab: LibTab::Liked,
+                    list: ListState::default(),
+                },
             );
             self.mode = Mode::Search {
                 input: String::new(),
@@ -297,61 +335,64 @@ impl App {
 
         // Phase 2a: handle Enter in Library mode (pushes a UiAction; no
         // mutable borrow of self.mode held while pushing to self.pending).
-        if let Some((tab, sel, _len)) = lib_state {
-            if matches!(k.code, KeyCode::Enter) {
-                match (tab, sel) {
-                    (LibTab::Albums, Some(idx)) => {
-                        if let SectionState::Loaded(v) = &self.albums {
-                            if let Some(a) = v.get(idx) {
-                                self.pending.push(UiAction::LoadAlbumTracks {
-                                    id: a.id.clone(),
-                                    title: a.name.clone(),
-                                });
-                            }
-                        }
+        if let Some((tab, sel, _len)) = lib_state
+            && matches!(k.code, KeyCode::Enter)
+        {
+            match (tab, sel) {
+                (LibTab::Albums, Some(idx)) => {
+                    if let SectionState::Loaded(v) = &self.albums
+                        && let Some(a) = v.get(idx)
+                    {
+                        self.pending.push(UiAction::LoadAlbumTracks {
+                            id: a.id.clone(),
+                            title: a.name.clone(),
+                        });
                     }
-                    (LibTab::Playlists, Some(idx)) => {
-                        if let SectionState::Loaded(v) = &self.playlists {
-                            if let Some(p) = v.get(idx) {
-                                self.pending.push(UiAction::LoadPlaylistTracks {
-                                    id: p.id.clone(),
-                                    title: p.name.clone(),
-                                });
-                            }
-                        }
-                    }
-                    (LibTab::Liked, Some(idx)) => {
-                        if let SectionState::Loaded(v) = &self.liked {
-                            if !v.is_empty() && idx < v.len() {
-                                let uris: Vec<TrackId> = v.iter().map(|t| t.id.clone()).collect();
-                                self.pending.push(UiAction::PlayContext { uris, start: idx });
-                            }
-                        }
-                    }
-                    (LibTab::Recent, Some(idx)) => {
-                        if let SectionState::Loaded(v) = &self.recent {
-                            if let Some(e) = v.get(idx) {
-                                self.pending.push(UiAction::Play(e.track.id.clone()));
-                            }
-                        }
-                    }
-                    _ => {}
                 }
-                return;
+                (LibTab::Playlists, Some(idx)) => {
+                    if let SectionState::Loaded(v) = &self.playlists
+                        && let Some(p) = v.get(idx)
+                    {
+                        self.pending.push(UiAction::LoadPlaylistTracks {
+                            id: p.id.clone(),
+                            title: p.name.clone(),
+                        });
+                    }
+                }
+                (LibTab::Liked, Some(idx)) => {
+                    if let SectionState::Loaded(v) = &self.liked
+                        && !v.is_empty()
+                        && idx < v.len()
+                    {
+                        let uris: Vec<TrackId> = v.iter().map(|t| t.id.clone()).collect();
+                        self.pending
+                            .push(UiAction::PlayContext { uris, start: idx });
+                    }
+                }
+                (LibTab::Recent, Some(idx)) => {
+                    if let SectionState::Loaded(v) = &self.recent
+                        && let Some(e) = v.get(idx)
+                    {
+                        self.pending.push(UiAction::Play(e.track.id.clone()));
+                    }
+                }
+                _ => {}
             }
+            return;
         }
 
         // Phase 2b: Enter in Detail mode (play tracks list starting at idx).
-        if matches!(k.code, KeyCode::Enter) {
-            if let Mode::Detail { tracks, list, .. } = &self.mode {
-                if let Some(idx) = list.selected() {
-                    if idx < tracks.len() {
-                        let uris: Vec<TrackId> = tracks.iter().map(|t| t.id.clone()).collect();
-                        self.pending.push(UiAction::PlayContext { uris, start: idx });
-                    }
-                }
-                return;
+        if matches!(k.code, KeyCode::Enter)
+            && let Mode::Detail { tracks, list, .. } = &self.mode
+        {
+            if let Some(idx) = list.selected()
+                && idx < tracks.len()
+            {
+                let uris: Vec<TrackId> = tracks.iter().map(|t| t.id.clone()).collect();
+                self.pending
+                    .push(UiAction::PlayContext { uris, start: idx });
             }
+            return;
         }
 
         // Phase 2b2: cursor navigation in Detail mode.
@@ -384,22 +425,32 @@ impl App {
                     *list = ListState::default();
                 }
                 (KeyCode::Char('j') | KeyCode::Down, _) => {
-                    if let Some(len) = lib_len { move_cursor(list, len, 1); }
+                    if let Some(len) = lib_len {
+                        move_cursor(list, len, 1);
+                    }
                 }
                 (KeyCode::Char('k') | KeyCode::Up, _) => {
-                    if let Some(len) = lib_len { move_cursor(list, len, -1); }
+                    if let Some(len) = lib_len {
+                        move_cursor(list, len, -1);
+                    }
                 }
                 _ => {}
             }
         }
-
     }
 
     fn handle_key_search(&mut self, k: crossterm::event::KeyEvent) {
         // Snapshot Enter intent: if results loaded + selection valid, play that track.
         if matches!(k.code, KeyCode::Enter) {
-            let play_id = if let Mode::Search { results: SectionState::Loaded(tracks), list, .. } = &self.mode {
-                list.selected().and_then(|idx| tracks.get(idx)).map(|t| t.id.clone())
+            let play_id = if let Mode::Search {
+                results: SectionState::Loaded(tracks),
+                list,
+                ..
+            } = &self.mode
+            {
+                list.selected()
+                    .and_then(|idx| tracks.get(idx))
+                    .map(|t| t.id.clone())
             } else {
                 None
             };
@@ -408,22 +459,31 @@ impl App {
                 return;
             }
             // Otherwise dispatch a search if input is non-empty.
-            if let Mode::Search { input, results, .. } = &mut self.mode {
-                if !input.is_empty() {
-                    let q = input.clone();
-                    *results = SectionState::Loading;
-                    self.pending.push(UiAction::Search(q));
-                }
+            if let Mode::Search { input, results, .. } = &mut self.mode
+                && !input.is_empty()
+            {
+                let q = input.clone();
+                *results = SectionState::Loading;
+                self.pending.push(UiAction::Search(q));
             }
             return;
         }
 
-        if let Mode::Search { input, results, list, back } = &mut self.mode {
+        if let Mode::Search {
+            input,
+            results,
+            list,
+            back,
+        } = &mut self.mode
+        {
             match k.code {
                 KeyCode::Esc => {
                     let back_mode = std::mem::replace(
                         back.as_mut(),
-                        Mode::Library { tab: LibTab::Liked, list: ListState::default() },
+                        Mode::Library {
+                            tab: LibTab::Liked,
+                            list: ListState::default(),
+                        },
                     );
                     self.mode = back_mode;
                 }
@@ -459,10 +519,10 @@ impl App {
     }
 
     fn clear_stale_toast(&mut self) {
-        if let Some((at, _)) = self.toast {
-            if at.elapsed() > Duration::from_secs(5) {
-                self.toast = None;
-            }
+        if let Some((at, _)) = self.toast
+            && at.elapsed() > Duration::from_secs(5)
+        {
+            self.toast = None;
         }
     }
 

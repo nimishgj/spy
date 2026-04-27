@@ -5,16 +5,16 @@ use std::time::Duration;
 use anyhow::Result;
 use crossterm::execute;
 use crossterm::terminal::{
-    disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
+    EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
-use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
+use ratatui::backend::CrosstermBackend;
 use tokio::net::UnixStream;
 
 use spfy::app::App;
 use spfy::event::{self, spawn_key_thread, spawn_tick};
-use spfy::remote::{split, RemoteApi, RemotePlayer};
-use spfy_core::ipc::{read_envelope, write_envelope, DaemonMsg, Envelope, FrontendMsg};
+use spfy::remote::{RemoteApi, RemotePlayer, split};
+use spfy_core::ipc::{DaemonMsg, Envelope, FrontendMsg, read_envelope, write_envelope};
 use tokio::io::BufReader;
 
 type Tui = Terminal<CrosstermBackend<Stdout>>;
@@ -103,9 +103,7 @@ async fn main() -> Result<()> {
             tracing::info!("spfy daemon exited");
             Ok(())
         }
-        Some("--stop") => {
-            stop_daemon().await
-        }
+        Some("--stop") => stop_daemon().await,
         _ => {
             init_logging()?;
             tracing::info!("spfy starting");
@@ -138,7 +136,10 @@ async fn stop_daemon() -> Result<()> {
     let (read_half, mut write_half) = stream.into_split();
     let mut reader = BufReader::new(read_half);
 
-    let env = Envelope { id: 1, msg: FrontendMsg::Shutdown };
+    let env = Envelope {
+        id: 1,
+        msg: FrontendMsg::Shutdown,
+    };
     write_envelope(&mut write_half, &env).await?;
 
     // Wait for ShutdownAck (or socket close).

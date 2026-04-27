@@ -6,13 +6,11 @@ use std::sync::Arc;
 
 use tokio::io::BufReader;
 use tokio::net::{UnixListener, UnixStream};
-use tokio::sync::{broadcast, mpsc, RwLock};
+use tokio::sync::{RwLock, broadcast, mpsc};
 use tracing::{info, warn};
 
 use crate::api::SpotifyApi;
-use crate::ipc::{
-    read_envelope, write_envelope, DaemonMsg, Envelope, FrontendMsg,
-};
+use crate::ipc::{DaemonMsg, Envelope, FrontendMsg, read_envelope, write_envelope};
 use crate::paths;
 use crate::player::{Cmd, Event};
 

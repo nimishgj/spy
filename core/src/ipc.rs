@@ -73,4 +73,3 @@ pub async fn write_envelope<T: Serialize, W: AsyncWrite + Unpin>(
     writer.flush().await?;
     Ok(())
 }
-

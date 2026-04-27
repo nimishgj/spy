@@ -1,3 +1,5 @@
+#![allow(deprecated)]
+
 use chrono::Utc;
 use rspotify::model::{
     AlbumId as RsAlbumId, ArtistId as RsArtistId, FullTrack, SavedTrack, SimplifiedAlbum,

@@ -91,7 +91,9 @@ fn random_redirect_uri() -> Result<String> {
 fn run_oauth(client_id: &str, scopes: &[&str]) -> Result<librespot_oauth::OAuthToken> {
     let redirect = random_redirect_uri()?;
     let builder = OAuthClientBuilder::new(client_id, &redirect, scopes.to_vec());
-    let client = builder.build().map_err(|e| CoreError::Auth(e.to_string()))?;
+    let client = builder
+        .build()
+        .map_err(|e| CoreError::Auth(e.to_string()))?;
     client
         .get_access_token()
         .map_err(|e| CoreError::Auth(e.to_string()))
@@ -141,7 +143,9 @@ pub fn rspotify_token() -> Result<StoredToken> {
 fn refresh_with_token(refresh_token: &str) -> Result<StoredToken> {
     let redirect = random_redirect_uri()?;
     let builder = OAuthClientBuilder::new(&spfy_client_id(), &redirect, API_SCOPES.to_vec());
-    let client = builder.build().map_err(|e| CoreError::Auth(e.to_string()))?;
+    let client = builder
+        .build()
+        .map_err(|e| CoreError::Auth(e.to_string()))?;
     let token = client
         .refresh_token(refresh_token)
         .map_err(|e| CoreError::Auth(e.to_string()))?;
@@ -153,8 +157,7 @@ fn map_token(token: librespot_oauth::OAuthToken) -> StoredToken {
         .expires_at
         .saturating_duration_since(std::time::Instant::now());
     let expires_at = chrono::Utc::now()
-        + chrono::Duration::from_std(remaining)
-            .unwrap_or_else(|_| chrono::Duration::seconds(0));
+        + chrono::Duration::from_std(remaining).unwrap_or_else(|_| chrono::Duration::seconds(0));
 
     StoredToken {
         access_token: token.access_token,
@@ -192,5 +195,8 @@ pub fn login() -> Result<Session> {
     };
     let api = AuthCodeSpotify::from_token_with_config(token, creds, Default::default(), config);
 
-    Ok(Session { player_credentials, api })
+    Ok(Session {
+        player_credentials,
+        api,
+    })
 }
