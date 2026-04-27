@@ -176,7 +176,7 @@ async fn main() -> Result<()> {
                             let api2 = api.clone();
                             let tx2 = tx.clone();
                             tokio::spawn(async move {
-                                let _ = match api2.search_tracks(&q, 50).await {
+                                let _ = match api2.search_tracks(&q, 10).await {
                                     Ok(tracks) => tx2.send(AppEvent::SearchResult(tracks)),
                                     Err(e) => tx2.send(AppEvent::SearchFailed(e.to_string())),
                                 };
