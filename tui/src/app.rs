@@ -359,9 +359,20 @@ impl App {
         if let Mode::Library { tab, list } = &mut self.mode {
             let lib_len = lib_state.map(|(_, _, l)| l);
             match (k.code, k.modifiers) {
-                (KeyCode::Tab, m) if !m.contains(KeyModifiers::SHIFT) => *tab = tab.next(),
-                (KeyCode::BackTab, _) => *tab = tab.previous(),
-                (KeyCode::Tab, m) if m.contains(KeyModifiers::SHIFT) => *tab = tab.previous(),
+                (KeyCode::Tab | KeyCode::Char('l') | KeyCode::Right, m)
+                    if !m.contains(KeyModifiers::SHIFT) =>
+                {
+                    *tab = tab.next();
+                    *list = ListState::default();
+                }
+                (KeyCode::BackTab | KeyCode::Char('h') | KeyCode::Left, _) => {
+                    *tab = tab.previous();
+                    *list = ListState::default();
+                }
+                (KeyCode::Tab, m) if m.contains(KeyModifiers::SHIFT) => {
+                    *tab = tab.previous();
+                    *list = ListState::default();
+                }
                 (KeyCode::Char('j') | KeyCode::Down, _) => {
                     if let Some(len) = lib_len { move_cursor(list, len, 1); }
                 }

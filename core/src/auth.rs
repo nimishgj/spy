@@ -17,7 +17,7 @@ use crate::error::{CoreError, Result};
 use crate::paths;
 
 /// PASTE YOUR DEVELOPER CLIENT ID HERE after registering at developer.spotify.com.
-pub const SPFY_CLIENT_ID: &str = "REPLACE_ME";
+pub const SPFY_CLIENT_ID: &str = "84872059dc8545d9a664db22fa217733";
 
 /// Spotify's official desktop-app client_id, used by librespot to authenticate
 /// as a Spotify Connect device. Standard librespot practice — not a secret.

@@ -15,7 +15,7 @@ impl SpotifyApi {
     }
 
     pub async fn liked_tracks(&self) -> Result<Vec<Track>> {
-        let mut out = Vec::new();
+        let mut saved: Vec<rspotify::model::SavedTrack> = Vec::new();
         let mut offset: u32 = 0;
         loop {
             let page = self
@@ -24,13 +24,14 @@ impl SpotifyApi {
                 .await
                 .map_err(|e| CoreError::Api(e.to_string()))?;
             let len = page.items.len() as u32;
-            out.extend(page.items.into_iter().map(convert::saved_track_to_model));
+            saved.extend(page.items);
             if page.next.is_none() || len == 0 {
                 break;
             }
             offset += len;
         }
-        Ok(out)
+        saved.sort_by(|a, b| b.added_at.cmp(&a.added_at));
+        Ok(saved.into_iter().map(convert::saved_track_to_model).collect())
     }
 
     pub async fn saved_albums(&self) -> Result<Vec<Album>> {
