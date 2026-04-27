@@ -2972,8 +2972,6 @@ checksum = "45373be0355f53d1ca1065b9585be9924c7090c4bdc327ebf5a7924feeea6325"
 [[package]]
 name = "rspotify-model"
 version = "0.16.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84b95fb66a9915464f94c7ce94af7f7b429708583bfd6b612f165f335364a8c5"
 dependencies = [
  "chrono",
  "enum_dispatch",

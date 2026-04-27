@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = ["core", "tui"]
+exclude = ["vendored/rspotify-model"]
 
 [workspace.package]
 version = "0.1.0"
@@ -17,6 +18,9 @@ thiserror    = "2"
 tracing      = "0.1"
 chrono       = { version = "0.4", features = ["serde"] }
 directories  = "5"
+
+[patch.crates-io]
+rspotify-model = { path = "vendored/rspotify-model" }
 
 [profile.release]
 lto = true
