@@ -32,22 +32,36 @@ pub fn render(f: &mut Frame, app: &mut App) {
 }
 
 fn render_tabs(f: &mut Frame, area: ratatui::layout::Rect, app: &App) {
-    let titles = ["Liked", "Albums", "Playlists", "Artists", "Recent"];
-    let selected = match &app.mode {
-        Mode::Library { tab, .. } => match tab {
-            LibTab::Liked => 0,
-            LibTab::Albums => 1,
-            LibTab::Playlists => 2,
-            LibTab::Artists => 3,
-            LibTab::Recent => 4,
-        },
-        _ => 0,
-    };
-    let tabs = Tabs::new(titles.iter().map(|t| Line::from(*t)).collect::<Vec<_>>())
-        .block(Block::default().borders(Borders::ALL))
-        .select(selected)
-        .highlight_style(Style::default().add_modifier(Modifier::BOLD | Modifier::UNDERLINED));
-    f.render_widget(tabs, area);
+    match &app.mode {
+        Mode::Library { tab, .. } => {
+            let titles = ["Liked", "Albums", "Playlists", "Artists", "Recent"];
+            let selected = match tab {
+                LibTab::Liked => 0,
+                LibTab::Albums => 1,
+                LibTab::Playlists => 2,
+                LibTab::Artists => 3,
+                LibTab::Recent => 4,
+            };
+            let tabs =
+                Tabs::new(titles.iter().map(|t| Line::from(*t)).collect::<Vec<_>>())
+                    .block(Block::default().borders(Borders::ALL))
+                    .select(selected)
+                    .highlight_style(
+                        Style::default().add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
+                    );
+            f.render_widget(tabs, area);
+        }
+        Mode::Detail { title, .. } => {
+            let p = Paragraph::new(format!("← Esc back · {title}"))
+                .block(Block::default().borders(Borders::ALL));
+            f.render_widget(p, area);
+        }
+        Mode::Search { .. } => {
+            let p = Paragraph::new("← Esc back · Search")
+                .block(Block::default().borders(Borders::ALL));
+            f.render_widget(p, area);
+        }
+    }
 }
 
 fn render_body(f: &mut Frame, area: ratatui::layout::Rect, app: &mut App) {

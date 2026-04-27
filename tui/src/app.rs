@@ -355,6 +355,17 @@ impl App {
             }
         }
 
+        // Phase 2b2: cursor navigation in Detail mode.
+        if let Mode::Detail { tracks, list, .. } = &mut self.mode {
+            let len = tracks.len();
+            match k.code {
+                KeyCode::Char('j') | KeyCode::Down => move_cursor(list, len, 1),
+                KeyCode::Char('k') | KeyCode::Up => move_cursor(list, len, -1),
+                _ => {}
+            }
+            return;
+        }
+
         // Phase 2c: tab/cursor mutation in Library mode.
         if let Mode::Library { tab, list } = &mut self.mode {
             let lib_len = lib_state.map(|(_, _, l)| l);
